@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes" />
+
+<!-- installable app -->
+<link rel="manifest" href="manifest.json" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Cosmic Atlas" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<title>Cosmic Atlas — The Zodiac, Explained Properly</title>
+<meta name="description" content="An interactive atlas of the zodiac: twelve signs, sixteen celestial bodies, twelve houses, real aspect geometry, a live birth-chart calculator computed from JPL-fitted planetary theory, the history of the system, a glossary and a quiz. No horoscopes." />
+<meta name="theme-color" content="#03040c" />
+
+<!-- Favicon is an inline data URI so the page needs no network and no extra
+     file. Social tags use relative paths for the same reason; if you publish
+     this at a real domain, absolutise og:url and og:image (crawlers want
+     absolute URLs) and add a <link rel="canonical"> pointing at it. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070a1c'/%3E%3Ctext x='32' y='45' font-size='40' text-anchor='middle' fill='%23a78bfa'%3E%E2%9C%B6%3C/text%3E%3C/svg%3E" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Cosmic Atlas" />
+<meta property="og:title" content="Cosmic Atlas — The Zodiac, Explained Properly" />
+<meta property="og:description" content="Twelve signs, sixteen celestial bodies, twelve houses and the real geometry that ties them together — plus a birth chart computed from JPL-fitted planetary theory. No horoscopes, no predictions." />
+<meta property="og:image" content="og.svg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The zodiac wheel with its twelve signs and the aspect geometry connecting them." />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Cosmic Atlas — The Zodiac, Explained Properly" />
+<meta name="twitter:description" content="An interactive map of a 2,000-year-old symbolic system, with the real astronomy underneath it." />
+<meta name="twitter:image" content="og.svg" />
+<link rel="stylesheet" href="css/atlas.css" />
+</head>
+<body>
+<div id="stars" aria-hidden="true"></div>
+
+<a class="sr-only" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="site-head-in">
+    <button class="logo" data-go="start" aria-label="Cosmic Atlas — home">
+      <span class="sig" aria-hidden="true">✶</span>
+      <span class="lt">Cosmic Atlas</span>
+    </button>
+    <nav class="mainnav" id="mainnav" aria-label="Sections"></nav>
+    <div class="head-tools">
+      <button class="iconbtn" id="btnSearch" aria-label="Search the site">
+        <span aria-hidden="true">⌕</span><span class="lbl">Search</span><kbd>/</kbd>
+      </button>
+      <button class="iconbtn" id="btnTheme" aria-label="Switch to light theme">
+        <span aria-hidden="true" id="themeGlyph">◐</span><span class="lbl" id="themeLbl">Light</span>
+      </button>
+      <button class="iconbtn" id="btnKeys" aria-label="Keyboard shortcuts">
+        <span aria-hidden="true">⌨</span><span class="lbl">Keys</span><kbd>?</kbd>
+      </button>
+      <button class="iconbtn" id="btnTour" aria-label="Start the guided tour">
+        <span aria-hidden="true">✧</span><span class="lbl">Tour</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ══════════════════════════════ START ══════════════════════════════ -->
+<section class="page" id="page-start" aria-label="Start here">
+  <div class="wrap">
+    <div class="hero">
+      <h1>The zodiac, explained properly</h1>
+      <p>
+        An interactive map of a 2,000-year-old symbolic system — twelve signs, ten
+        celestial bodies, twelve houses and the real geometry that ties them together.
+        No horoscopes. No predictions. Just the structure, made clear, plus the actual
+        astronomy underneath it.
+      </p>
+      <div class="hero-cta">
+        <button class="btn primary" data-tour="start">✧ &nbsp;Take the guided tour</button>
+        <button class="btn" data-go="wheel">Explore the wheel</button>
+        <button class="btn" data-go="chart">Chart the real sky</button>
+      </div>
+    </div>
+
+    <h3 class="sec">The question everyone arrives with</h3>
+    <div class="micro" id="signTool">
+      <div class="micro-in">
+        <label for="mDate">What sign is a date?</label>
+        <input type="date" id="mDate" min="1600-01-01" max="2200-12-31">
+        <button class="btn primary" type="button" id="mGo">Find the sign</button>
+      </div>
+      <div class="micro-out" id="mOut"></div>
+    </div>
+
+    <h3 class="sec">The whole system in one sentence</h3>
+    <div class="formula" id="formula"></div>
+    <p class="sentence">
+      Every statement in astrology is built from those three parts:
+      <b>a planet</b> (what kind of energy), <b>in a sign</b> (the style it acts with),
+      <b>in a house</b> (the area of life it shows up in). Learn those three and you can
+      read anything the tradition throws at you.
+    </p>
+
+    <h3 class="sec">Where to go</h3>
+    <div class="grid g3" id="startCards"></div>
+
+    <h3 class="sec">Three things worth knowing first</h3>
+    <div class="grid g2" id="startFacts"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ WHEEL ══════════════════════════════ -->
+<section class="page" id="page-wheel" aria-label="The wheel of signs">
+  <div class="wrap wide">
+    <p class="eyebrow">Section one</p>
+    <h1 class="ptitle">The Wheel of Twelve Signs</h1>
+    <p class="psub">
+      Tap any sign to open its profile. Tap a second to compare the two. The coloured
+      lines are real angles — signs sitting 120° apart share an element, signs 90° apart
+      share a modality, signs 180° apart sit on an axis. Everything here is geometry
+      before it is personality.
+    </p>
+
+    <div class="app">
+      <div>
+        <section class="card controls" aria-label="Filters" id="wheelControls">
+          <div class="controls-top">
+            <div class="controls-title">Cosmic Filters</div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap">
+              <button class="chip ghost" id="btnRays" type="button" aria-pressed="false">Compatibility rays</button>
+              <button class="chip ghost" id="btnMatrix" type="button" aria-pressed="false">Compatibility matrix</button>
+              <button class="chip ghost" id="btnAll" type="button">Reveal all aspects</button>
+              <button class="chip ghost" id="btnClear" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="ctl-row">
+            <div class="ctl-group">
+              <div class="ctl-label"><span class="geo">△</span> Trines · Elements <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">120°</span></div>
+              <div class="chips" id="elemChips"></div>
+            </div>
+            <div class="ctl-group">
+              <div class="ctl-label"><span class="geo">□</span> Squares · Modalities <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">90°</span></div>
+              <div class="chips" id="modChips"></div>
+            </div>
+            <div class="ctl-group">
+              <div class="ctl-label"><span class="geo">↔</span> Oppositions · Polarity Axes <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">180°</span></div>
+              <div class="chips" id="oppChips"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card wheel-card" aria-label="Zodiac wheel" id="wheelCard">
+          <div class="wheel-wrap">
+            <svg id="wheel" viewBox="0 0 820 820" role="application"
+                 aria-label="Interactive zodiac wheel with twelve signs">
+              <defs>
+                <radialGradient id="voidGrad" cx="50%" cy="46%" r="62%">
+                  <stop offset="0%"  stop-color="#161c46" stop-opacity=".85"/>
+                  <stop offset="52%" stop-color="#0a0e2a" stop-opacity=".72"/>
+                  <stop offset="100%" stop-color="#04050f" stop-opacity=".35"/>
+                </radialGradient>
+                <radialGradient id="hubGrad" cx="50%" cy="40%" r="60%">
+                  <stop offset="0%" stop-color="rgba(167,139,250,.42)"/>
+                  <stop offset="60%" stop-color="rgba(40,30,110,.28)"/>
+                  <stop offset="100%" stop-color="rgba(6,8,22,.05)"/>
+                </radialGradient>
+                <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="4" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              <g id="layer-bg"></g>
+              <g id="layer-aspects"></g>
+              <g id="layer-pair"></g>
+              <g id="layer-nodes"></g>
+              <g id="layer-hub"></g>
+            </svg>
+          </div>
+          <div class="legend" id="legend"></div>
+        </section>
+      </div>
+
+      <aside class="card panel" aria-live="polite" id="wheelPanel">
+        <div class="panel-head">
+          <h2 id="panelTitle">The Wheel</h2>
+          <div class="sel-strip" id="selStrip"><span class="empty-hint">No signs selected</span></div>
+        </div>
+        <div class="panel-body" id="panelBody"></div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ PLANETS ══════════════════════════════ -->
+<section class="page" id="page-planets" aria-label="Planets and bodies">
+  <div class="wrap">
+    <p class="eyebrow">Section two</p>
+    <h1 class="ptitle">Planets &amp; Bodies</h1>
+    <p class="psub">
+      In a chart the planets are the <em>verbs</em> — they are what is happening. A sign
+      only describes the style; the planet is the thing doing something. Ten main bodies
+      plus six minor ones, each with the real astronomy alongside what the tradition
+      reads into it.
+    </p>
+    <div class="pl-filter" id="plFilter"></div>
+    <div id="plDetail"></div>
+    <h3 class="sec">All bodies</h3>
+    <div class="grid g4" id="plGrid"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ HOUSES ══════════════════════════════ -->
+<section class="page" id="page-houses" aria-label="The twelve houses">
+  <div class="wrap wide">
+    <p class="eyebrow">Section three</p>
+    <h1 class="ptitle">The Twelve Houses</h1>
+    <p class="psub">
+      Signs are slices of the sky. Houses are slices of <em>your day</em> — twelve sectors
+      fixed to the horizon at the moment and place you were born. Same wheel, different
+      question: signs say <em>how</em>, houses say <em>where in life</em>.
+    </p>
+
+    <div class="vs-grid" id="svhGrid"></div>
+
+    <div class="houses-layout" style="margin-top:26px">
+      <div class="card" style="padding:10px">
+        <svg id="hwheel" viewBox="0 0 700 700" role="application" aria-label="Interactive wheel of the twelve houses"></svg>
+      </div>
+      <div id="hDetail"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ ASPECTS ══════════════════════════════ -->
+<section class="page" id="page-aspects" aria-label="Angles and aspects">
+  <div class="wrap">
+    <p class="eyebrow">Section four</p>
+    <h1 class="ptitle">Angles &amp; Aspects</h1>
+    <p class="psub">
+      An aspect is nothing more than the angle between two points on a 360° circle.
+      A handful of those angles were singled out as meaningful — and every one of them
+      divides the circle by a small whole number. Drag the two markers and watch the
+      angle name change.
+    </p>
+
+    <div class="asp-layout">
+      <div class="card" style="padding:12px">
+        <svg id="adial" viewBox="0 0 640 640" role="application"
+             aria-label="Drag two points around a circle to measure the angle between them"></svg>
+        <p style="text-align:center;font-size:12px;color:var(--faint);margin:4px 0 8px">
+          Drag either marker · or use ← → with a marker focused
+        </p>
+        <div class="snaprow">
+          <label class="checkline" for="aSnap">
+            <input type="checkbox" id="aSnap" checked>
+            <span>Snap to named angles</span>
+          </label>
+          <span class="snaphint">Hold Shift while dragging to override</span>
+        </div>
+      </div>
+      <div>
+        <div class="areadout" id="aRead"></div>
+        <div class="asp-legend" id="aLegend"></div>
+      </div>
+    </div>
+
+    <h3 class="sec">Why these angles?</h3>
+    <div class="grid g2" id="aWhy"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ CHART ══════════════════════════════ -->
+<section class="page" id="page-chart" aria-label="Chart the real sky">
+  <div class="wrap wide">
+    <p class="eyebrow">Section five</p>
+    <h1 class="ptitle">Chart the Real Sky</h1>
+    <p class="psub">
+      Enter a date, a time and a place, and this computes where the Sun, Moon and planets
+      actually were in the sky at that moment — real positional astronomy, calculated in
+      your browser, accurate to well under an arcminute. It then labels each position in
+      the traditional astrological vocabulary so you can see how the two fit together.
+      Nothing here predicts anything.
+    </p>
+
+    <div class="presets">
+      <span class="presets-l">Nothing to hand? Try a moment:</span>
+      <div class="presets-row" id="cPresets"></div>
+    </div>
+
+    <form class="chart-form" id="chartForm" autocomplete="off">
+      <div class="frow">
+        <div class="field">
+          <label for="cDate">Date</label>
+          <input type="date" id="cDate" required min="1600-01-01" max="2200-12-31">
+          <div class="hint" id="cDateHint">1600 to 2200 — accuracy is best near the present</div>
+        </div>
+        <div class="field">
+          <label for="cTime">Time of day</label>
+          <input type="time" id="cTime" value="12:00" required>
+          <div class="hint">Local clock time at the place below</div>
+          <label class="checkline" for="cNoTime">
+            <input type="checkbox" id="cNoTime">
+            <span>I don’t know the birth time</span>
+          </label>
+        </div>
+        <div class="field" style="flex:2 1 260px">
+          <label for="cPlace">Place</label>
+          <input type="text" id="cPlace" placeholder="Start typing a city…" role="combobox"
+                 aria-expanded="false" aria-controls="cPlaceList" aria-autocomplete="list">
+          <div class="ac-list" id="cPlaceList" role="listbox"></div>
+          <div class="hint" id="cPlaceHint">Time zone and daylight saving are handled automatically</div>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field">
+          <label for="cHouse">House system</label>
+          <select id="cHouse">
+            <option value="whole">Whole Sign — simplest, and the oldest</option>
+            <option value="placidus">Placidus — the modern default</option>
+            <option value="equal">Equal — 30° from the Ascendant</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto;display:flex;align-items:flex-end;gap:9px">
+          <button class="btn primary" type="submit">Calculate</button>
+          <button class="btn" type="button" id="cNow">Sky right now</button>
+        </div>
+      </div>
+      <div class="notice calm" style="margin-bottom:0">
+        <b>Time matters.</b> The Moon moves about half a degree an hour and the Ascendant
+        moves a whole degree every four minutes. If you do not know your birth time, tick
+        the box above — the planets will still be right, and everything that depends on the
+        time will be marked as unavailable rather than quietly guessed.
+      </div>
+      <div id="cWarn"></div>
+    </form>
+
+    <div id="chartOut"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ HISTORY ══════════════════════════════ -->
+<section class="page" id="page-history" aria-label="Sky and story">
+  <div class="wrap">
+    <p class="eyebrow">Section six</p>
+    <h1 class="ptitle">Sky &amp; Story</h1>
+    <p class="psub">
+      Where the zodiac came from, what it originally tracked, and why the signs no longer
+      line up with the constellations they were named after. This is the part most
+      explanations skip.
+    </p>
+    <div id="histOut"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ QUIZ ══════════════════════════════ -->
+<section class="page" id="page-quiz" aria-label="Test yourself">
+  <div class="wrap">
+    <p class="eyebrow">Section seven</p>
+    <h1 class="ptitle">Test Yourself</h1>
+    <p class="psub">
+      Short questions on the structure — elements, modalities, rulerships, angles, houses
+      and the astronomy. Every answer comes with an explanation, and getting one wrong is
+      the point.
+    </p>
+    <div class="quizwrap" id="quizOut"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ ABOUT ══════════════════════════════ -->
+<section class="page" id="page-about" aria-label="How to read this site">
+  <div class="wrap">
+    <p class="eyebrow">Reference</p>
+    <h1 class="ptitle">How to Read This Site</h1>
+    <p class="psub">
+      What this is, what it is not, how the numbers are produced, and where they
+      stop being trustworthy. This page exists because a site that computes real
+      sky positions and prints astrological labels next to them owes you a clear
+      account of which is which.
+    </p>
+
+    <div class="notice" style="border-color:rgba(63,220,139,.4)">
+      <b>The short version.</b> Where the planets were is a matter of fact, computed
+      here from a planetary theory fitted to NASA/JPL's DE421 ephemeris. What those
+      positions mean is a matter of tradition — a 2,000-year-old symbolic system that
+      this site describes, explains and takes seriously as cultural history. It is not
+      treated here as a predictive science, and nothing on this site will tell you what
+      is going to happen.
+    </div>
+
+    <h3 class="sec">The two kinds of statement</h3>
+    <div class="grid g2">
+      <div class="tile" style="--c:#3fdc8b;cursor:default">
+        <span class="tn">Facts</span>
+        <span class="td">Positions, angular separations, retrograde motion, house cusps,
+        precession, time zone conversion. All of it is arithmetic on an ephemeris and
+        can be checked against any other astronomical source.</span>
+      </div>
+      <div class="tile" style="--c:#a78bfa;cursor:default">
+        <span class="tn">Tradition</span>
+        <span class="td">That Mars means drive, that a square is friction, that the 7th
+        house is partnership. These are conventions of a symbolic system, reported as
+        what the tradition holds — not as claims about how the world works.</span>
+      </div>
+    </div>
+
+    <h3 class="sec">How the positions are computed</h3>
+    <div class="plainbox" style="max-width:74ch">
+      <p>Your local date, time and place are converted to a UTC instant using the IANA
+      time zone database, then to a Julian Day, then corrected to Terrestrial Time with
+      a ΔT polynomial. Planetary positions come from a truncated series fitted to
+      JPL's DE421, with light-time correction iterated three times, annual aberration,
+      nutation and precession applied. The Moon uses a separate lunar series. The
+      Ascendant and Midheaven are derived from local sidereal time and the obliquity
+      of date.</p>
+      <p>Everything runs in your browser. Nothing is sent anywhere, because there is
+      nowhere to send it — this site has no backend, no analytics and no network calls
+      of any kind once loaded.</p>
+    </div>
+
+    <h3 class="sec">Where it stops being reliable</h3>
+    <div id="limitsList"></div>
+
+    <h3 class="sec">Choices this site makes</h3>
+    <div id="choicesList"></div>
+
+    <div class="notice calm">
+      <b>Found something wrong?</b> Positions are checkable. If a figure here disagrees
+      with an authoritative ephemeris by more than the tolerances above, that is a bug
+      worth reporting, not a matter of interpretation.
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ GLOSSARY ══════════════════════════════ -->
+<section class="page" id="page-glossary" aria-label="Glossary">
+  <div class="wrap">
+    <p class="eyebrow">Reference</p>
+    <h1 class="ptitle">Glossary</h1>
+    <p class="psub">
+      Every term used anywhere on this site, in plain language. Dotted-underlined words
+      throughout the site open a definition right where you are.
+    </p>
+    <div class="field gsearch">
+      <label for="gq">Find a term</label>
+      <input type="text" id="gq" placeholder="e.g. retrograde, orb, cusp…">
+    </div>
+    <div class="gcats" id="gCats"></div>
+    <div class="glist" id="gList"></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <b>Cosmic Atlas</b> · Tropical zodiac · Classical rulerships after Ptolemy<br>
+  Sky positions computed from JPL-fitted planetary theory — verified against DE421 to
+  better than 20 arcseconds<br>
+  Astrology is presented here as a symbolic tradition and a piece of cultural history,
+  not as a predictive science.<br>
+  <button class="footlink" data-go="about">How to read this site →</button>
+</footer>
+
+<div id="tip" role="tooltip"></div>
+<div id="readbar" aria-hidden="true"><i></i></div>
+
+<nav id="tabbar" aria-label="Sections"></nav>
+<div id="moreBackdrop" aria-hidden="true"></div>
+<div id="moreSheet" role="dialog" aria-modal="true" aria-label="All sections" aria-hidden="true">
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <div id="moreList"></div>
+</div>
+
+<div id="installBar" role="region" aria-label="Install this app">
+  <div class="it"><b>Install Cosmic Atlas</b>Works fully offline once installed.</div>
+  <button class="btn primary" type="button" id="installGo">Install</button>
+  <button class="btn" type="button" id="installNo" aria-label="Not now">✕</button>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<div id="keysOverlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+  <div class="keysbox">
+    <h3>Keyboard shortcuts</h3>
+    <dl class="keys">
+      <dt><kbd>/</kbd> <span class="or">or</span> <kbd>Ctrl</kbd><kbd>K</kbd></dt>
+        <dd>Search everything</dd>
+      <dt><kbd>?</kbd></dt><dd>This list</dd>
+      <dt><kbd>g</kbd> then <kbd>1</kbd>–<kbd>9</kbd></dt><dd>Jump to a section</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+        <dd>Previous / next section — and step the guided tour, or nudge an aspect marker</dd>
+      <dt><kbd>Esc</kbd></dt>
+        <dd>Close search or this list · clear the wheel selection · end the tour</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Open the highlighted search result</dd>
+    </dl>
+    <button class="btn" type="button" id="keysClose">Close</button>
+  </div>
+</div>
+
+<div id="searchOverlay" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="searchbox">
+    <input type="text" id="sInput" placeholder="Search signs, planets, houses, terms…"
+           aria-label="Search" autocomplete="off">
+    <div class="sres" id="sRes"></div>
+  </div>
+</div>
+
+<div class="tour-spot" id="tourSpot" aria-hidden="true"></div>
+<div id="tourBox" role="dialog" aria-live="polite" aria-label="Guided tour">
+  <div class="tstep" id="tStep"></div>
+  <h4 id="tTitle"></h4>
+  <p id="tText"></p>
+  <div class="trow">
+    <div class="tdots" id="tDots"></div>
+    <button class="btn" id="tEnd" style="padding:8px 14px;font-size:12.5px">End tour</button>
+    <button class="btn" id="tPrev" style="padding:8px 14px;font-size:12.5px">Back</button>
+    <button class="btn primary" id="tNext" style="padding:8px 16px;font-size:12.5px">Next</button>
+  </div>
+</div>
+
+
+<script src="js/01-astro.js"></script>
+<script src="js/02-signs-plain.js"></script>
+<script src="js/03-bodies.js"></script>
+<script src="js/04-houses.js"></script>
+<script src="js/05-glossary.js"></script>
+<script src="js/06-history.js"></script>
+<script src="js/07-quiz.js"></script>
+<!-- place data (TZS / CTRY / CITIES) is loaded on demand from data/cities.js -->
+<script src="js/08-signs-wheel.js"></script>
+<script src="js/09-site-core.js"></script>
+<script src="js/10-planets-houses-aspects.js"></script>
+<script src="js/11-chart.js"></script>
+<script src="js/12-history-quiz-glossary-tour.js"></script>
+<script src="js/13-boot.js"></script>
+</body>
+</html>

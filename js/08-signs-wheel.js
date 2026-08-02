@@ -1,545 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Cosmic Atlas — An Interactive Map of the Twelve Signs</title>
-<meta name="description" content="An interactive SVG zodiac wheel mapping elements, modalities, polarities and celestial ruling bodies across all twelve signs." />
-<style>
-/* ============================================================
-   COSMIC ATLAS — self-contained stylesheet
-   ============================================================ */
-
-:root{
-  /* void */
-  --void-0:#03040c;
-  --void-1:#070a1c;
-  --void-2:#0d1233;
-  --nebula:#1b1046;
-
-  /* surfaces */
-  --panel:rgba(12,16,40,.72);
-  --panel-solid:#0b0f28;
-  --panel-2:rgba(255,255,255,.035);
-  --stroke:rgba(160,175,255,.14);
-  --stroke-2:rgba(160,175,255,.28);
-
-  /* type */
-  --text:#f2f4ff;
-  --text-2:#c4caf0;
-  --muted:#8b93c4;
-  --faint:#5b628f;
-
-  /* elements */
-  --fire:#ff5f45;
-  --earth:#3fdc8b;
-  --air:#ffd35e;
-  --water:#4fb6ff;
-
-  /* modalities */
-  --cardinal:#ff6fc4;
-  --fixed:#a988ff;
-  --mutable:#4fe6d0;
-
-  /* axis / accent */
-  --axis:#e7ebff;
-  --accent:#a78bfa;
-  --accent-2:#63d3ff;
-
-  --radius:18px;
-  --radius-sm:11px;
-  --shadow:0 24px 70px -24px rgba(0,0,0,.9);
-}
-
-*{box-sizing:border-box}
-html,body{height:100%}
-html{-webkit-text-size-adjust:100%}
-
-body{
-  margin:0;
-  font-family:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:var(--text);
-  background:
-    radial-gradient(1200px 780px at 12% -12%, rgba(88,58,190,.30), transparent 62%),
-    radial-gradient(1000px 700px at 92% 4%, rgba(20,110,190,.24), transparent 60%),
-    radial-gradient(900px 900px at 50% 118%, rgba(120,40,160,.22), transparent 62%),
-    linear-gradient(180deg, var(--void-1) 0%, var(--void-0) 60%, #02030a 100%);
-  background-attachment:fixed;
-  min-height:100%;
-  overflow-x:hidden;
-  line-height:1.55;
-  -webkit-font-smoothing:antialiased;
-}
-
-/* ---------- starfield ---------- */
-#stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-#stars i{
-  position:absolute;display:block;border-radius:50%;
-  background:#fff;opacity:.5;
-  animation:twinkle linear infinite;
-}
-@keyframes twinkle{
-  0%,100%{opacity:.10;transform:scale(.8)}
-  50%{opacity:.85;transform:scale(1.15)}
-}
-
-/* ---------- shell ---------- */
-.shell{position:relative;z-index:1;max-width:1560px;margin:0 auto;padding:26px 20px 80px}
-
-header.masthead{
-  display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
-  gap:16px;margin-bottom:22px;
-}
-.brand{display:flex;align-items:center;gap:15px;min-width:0}
-.sigil{
-  width:52px;height:52px;flex:none;border-radius:50%;
-  display:grid;place-items:center;font-size:25px;color:#fff;
-  background:radial-gradient(circle at 32% 28%, rgba(167,139,250,.95), rgba(60,30,140,.55) 62%, rgba(10,12,36,.9));
-  border:1px solid rgba(190,175,255,.45);
-  box-shadow:0 0 34px rgba(140,110,255,.5), inset 0 0 22px rgba(120,90,255,.4);
-  animation:orbit 26s linear infinite;
-}
-@keyframes orbit{to{transform:rotate(360deg)}}
-h1{
-  margin:0;font-size:clamp(21px,2.5vw,30px);letter-spacing:.5px;font-weight:650;
-  background:linear-gradient(94deg,#ffffff 0%,#d6c9ff 45%,#8fd8ff 100%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.tagline{margin:2px 0 0;font-size:12.5px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase}
-
-.masthead-note{
-  font-size:12.5px;color:var(--muted);max-width:400px;text-align:right;
-  border-left:1px solid var(--stroke);padding-left:14px;
-}
-@media(max-width:760px){.masthead-note{text-align:left;border-left:0;padding-left:0}}
-
-/* ---------- layout ---------- */
-.app{
-  display:grid;
-  grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr);
-  gap:24px;align-items:start;
-}
-@media(max-width:1080px){.app{grid-template-columns:1fr}}
-
-.card{
-  background:var(--panel);
-  border:1px solid var(--stroke);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
-}
-
-/* ---------- controls ---------- */
-.controls{padding:16px 18px 18px;margin-bottom:20px}
-.controls-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.controls-title{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-2);font-weight:600}
-.ctl-row{display:flex;flex-wrap:wrap;gap:18px}
-.ctl-group{flex:1 1 210px;min-width:0}
-.ctl-label{
-  font-size:10.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--faint);
-  font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:7px;
-}
-.ctl-label .geo{font-size:13px;line-height:1;opacity:.85}
-.chips{display:flex;flex-wrap:wrap;gap:7px}
-
-.chip{
-  appearance:none;cursor:pointer;font:inherit;
-  font-size:12px;font-weight:560;letter-spacing:.04em;
-  padding:6.5px 12px;border-radius:999px;
-  color:var(--text-2);
-  background:rgba(255,255,255,.035);
-  border:1px solid var(--stroke);
-  transition:background .22s, color .22s, border-color .22s, box-shadow .22s, transform .18s;
-  display:inline-flex;align-items:center;gap:7px;
-  line-height:1.2;
-}
-.chip:hover{background:rgba(255,255,255,.085);border-color:var(--stroke-2);transform:translateY(-1px)}
-.chip:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-.chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor;flex:none}
-.chip[aria-pressed="true"]{
-  color:#05060f;font-weight:700;
-  background:var(--chipc,#fff);
-  border-color:transparent;
-  box-shadow:0 0 20px -2px var(--chipc,#fff), 0 0 44px -14px var(--chipc,#fff);
-}
-.chip[aria-pressed="true"] .dot{background:rgba(5,6,15,.55);box-shadow:none}
-.chip.ghost{font-size:11.5px;color:var(--muted)}
-.chip.ghost:hover{color:var(--text)}
-
-/* ---------- wheel ---------- */
-.wheel-card{padding:8px}
-.wheel-wrap{position:relative;width:100%}
-svg#wheel{display:block;width:100%;height:auto;overflow:visible;touch-action:manipulation}
-
-.ring{fill:none;stroke:rgba(160,175,255,.13)}
-.ring-faint{fill:none;stroke:rgba(160,175,255,.07)}
-.tick{stroke:rgba(160,175,255,.20)}
-.tick-min{stroke:rgba(160,175,255,.10)}
-
-.node{cursor:pointer;transition:opacity .45s ease}
-.node .halo{
-  fill:var(--c);opacity:0;transition:opacity .3s ease;
-  filter:blur(13px);
-}
-.node .disc{
-  fill:rgba(9,12,32,.92);
-  stroke:var(--c);stroke-width:1.4;
-  transition:stroke-width .25s ease, fill .25s ease;
-}
-.node .rim{
-  fill:none;stroke:var(--c);stroke-width:1;opacity:.28;
-  transition:opacity .3s ease, r .3s ease;
-}
-.node .glyph{
-  fill:var(--c);font-size:31px;text-anchor:middle;
-  font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2","Arial Unicode MS",serif;
-  transition:fill .25s ease;
-  paint-order:stroke;
-}
-.node .nm{
-  fill:#eef1ff;font-size:12.5px;font-weight:640;text-anchor:middle;letter-spacing:.13em;
-}
-.node .md{
-  fill:var(--muted);font-size:8.4px;font-weight:600;text-anchor:middle;letter-spacing:.2em;
-  text-transform:uppercase;
-}
-.node:hover .halo{opacity:.55}
-.node:hover .disc{stroke-width:2.2}
-.node:hover .rim{opacity:.6}
-.node:focus{outline:none}
-.node:focus-visible .rim{opacity:1;stroke-dasharray:3 3}
-
-.node.selected .halo{opacity:.75}
-.node.selected .disc{stroke-width:3;fill:rgba(18,22,54,.96)}
-.node.selected .rim{opacity:.95}
-.node.selected .nm{fill:#fff}
-.node.dim{opacity:.22}
-.node.dim:hover{opacity:.6}
-
-.badge-a,.badge-b{font-size:9px;font-weight:800;letter-spacing:.1em;text-anchor:middle;fill:#04050f}
-
-.aspect{fill:none;stroke-linecap:round;pointer-events:none}
-.aspect-hit{fill:none;stroke:transparent;stroke-width:18;cursor:pointer;pointer-events:stroke}
-.aspect-hit:hover + .aspect,.aspect-g:hover .aspect{stroke-width:3.4;opacity:1}
-.aspect-g{transition:opacity .3s}
-
-.pair-line{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;
-  filter:drop-shadow(0 0 8px rgba(167,139,250,.85));
-  stroke-dasharray:7 7;animation:march 1.4s linear infinite;pointer-events:none}
-@keyframes march{to{stroke-dashoffset:-28}}
-
-.hub-ring{fill:none;stroke:rgba(160,175,255,.18)}
-.hub-t1{fill:#fff;font-size:16px;font-weight:640;text-anchor:middle;letter-spacing:.22em;text-transform:uppercase}
-.hub-t2{fill:var(--muted);font-size:9.6px;font-weight:600;text-anchor:middle;letter-spacing:.26em;text-transform:uppercase}
-.hub-glyph{font-size:38px;text-anchor:middle;font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2",serif}
-
-/* ---------- legend ---------- */
-.legend{
-  display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;
-  padding:10px 14px 14px;font-size:11px;color:var(--muted);letter-spacing:.06em;
-}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.legend b{width:9px;height:9px;border-radius:50%;display:inline-block;box-shadow:0 0 10px currentColor}
-
-/* ---------- panel ---------- */
-.panel{
-  padding:0;overflow:hidden;position:sticky;top:22px;
-  max-height:calc(100vh - 44px);display:flex;flex-direction:column;
-}
-@media(max-width:1080px){.panel{position:static;max-height:none}}
-
-.panel-head{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:14px 18px;border-bottom:1px solid var(--stroke);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-}
-.panel-head h2{margin:0;font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-2);font-weight:650}
-.panel-body{padding:20px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(160,175,255,.3) transparent}
-.panel-body::-webkit-scrollbar{width:8px}
-.panel-body::-webkit-scrollbar-thumb{background:rgba(160,175,255,.22);border-radius:99px}
-
-.fade-in{animation:fadeUp .4s ease both}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-
-/* intro */
-.intro-lead{font-size:14px;color:var(--text-2);margin:0 0 16px}
-.howto{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:9px}
-.howto li{
-  display:flex;gap:11px;align-items:flex-start;font-size:13px;color:var(--text-2);
-  background:var(--panel-2);border:1px solid var(--stroke);border-radius:var(--radius-sm);padding:10px 12px;
-}
-.howto .k{
-  flex:none;font-size:10px;font-weight:800;letter-spacing:.09em;color:#04050f;
-  background:linear-gradient(120deg,var(--accent),var(--accent-2));
-  border-radius:6px;padding:3px 7px;margin-top:1px;text-transform:uppercase;
-}
-.sect{margin:0 0 22px}
-.sect:last-child{margin-bottom:4px}
-.sect-h{
-  font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;font-weight:750;
-  color:var(--faint);margin:0 0 10px;display:flex;align-items:center;gap:9px;
-}
-.sect-h::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--stroke),transparent)}
-
-/* sign profile */
-.prof-head{display:flex;gap:15px;align-items:center;margin-bottom:6px}
-.prof-glyph{
-  width:70px;height:70px;flex:none;border-radius:50%;display:grid;place-items:center;
-  font-size:36px;font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2",serif;
-  color:var(--c);background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.14), rgba(6,8,24,.9) 68%);
-  border:1.5px solid var(--c);
-  box-shadow:0 0 30px -6px var(--c), inset 0 0 24px -8px var(--c);
-}
-.prof-name{margin:0;font-size:26px;font-weight:660;letter-spacing:.02em;line-height:1.1}
-.prof-sub{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
-.prof-drive{
-  font-size:14.5px;font-style:italic;color:var(--text);margin:14px 0 16px;padding-left:13px;
-  border-left:2px solid var(--c);
-}
-.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-bottom:20px}
-.meta{
-  background:var(--panel-2);border:1px solid var(--stroke);border-radius:var(--radius-sm);
-  padding:9px 11px;
-}
-.meta dt{font-size:9.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:0}
-.meta dd{margin:3px 0 0;font-size:13px;font-weight:600;color:var(--text)}
-
-.ruler{
-  border:1px solid var(--stroke);border-radius:var(--radius-sm);
-  background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
-  padding:12px 13px;margin-bottom:9px;
-}
-.ruler-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
-.ruler-name{font-size:15px;font-weight:660;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
-.ruler-sym{font-size:17px;font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2",serif;color:var(--c)}
-.tag{
-  font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:750;
-  padding:3px 8px;border-radius:99px;border:1px solid;
-}
-.tag.trad{color:#ffd9a3;border-color:rgba(255,190,110,.42);background:rgba(255,180,90,.10)}
-.tag.mod{color:#b7d4ff;border-color:rgba(120,175,255,.42);background:rgba(90,150,255,.10)}
-.tag.both{color:#d5c6ff;border-color:rgba(170,140,255,.45);background:rgba(150,110,255,.11)}
-.tag.minor{color:#a8f0d6;border-color:rgba(90,230,190,.36);background:rgba(60,220,170,.09)}
-.ruler-note{font-size:12.5px;color:var(--text-2);margin:0}
-.foot-note{
-  font-size:12px;color:var(--muted);font-style:italic;margin:10px 0 0;
-  padding:9px 11px;border-radius:var(--radius-sm);background:rgba(120,140,255,.06);
-  border:1px dashed var(--stroke);
-}
-.body-copy{font-size:13.5px;color:var(--text-2);margin:0 0 12px}
-.kw{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
-.kw span{
-  font-size:11.5px;padding:4px 10px;border-radius:999px;
-  background:color-mix(in srgb, var(--c) 14%, transparent);
-  border:1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  color:var(--text);letter-spacing:.03em;
-}
-@supports not (background: color-mix(in srgb, red 10%, transparent)){
-  .kw span{background:rgba(255,255,255,.07);border-color:var(--stroke-2)}
-}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:420px){.two-col{grid-template-columns:1fr}}
-.mini-h{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:750;margin:0 0 7px}
-.mini-h.up{color:#7ef0b8}
-.mini-h.down{color:#ff9db0}
-.tick-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.tick-list li{font-size:12.5px;color:var(--text-2);display:flex;gap:8px;align-items:flex-start}
-.tick-list li::before{content:"◆";font-size:7px;line-height:1.9;color:var(--c);flex:none}
-
-.rel-row{display:flex;flex-wrap:wrap;gap:7px}
-.rel{
-  cursor:pointer;font:inherit;font-size:12px;font-weight:560;
-  padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.04);
-  border:1px solid var(--stroke);color:var(--text-2);
-  display:inline-flex;align-items:center;gap:7px;transition:all .2s;
-}
-.rel:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-1px);border-color:var(--stroke-2)}
-.rel .g{font-size:14px;font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2",serif}
-
-/* comparison */
-.cmp-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin-bottom:6px}
-.cmp-sign{text-align:center}
-.cmp-sign .cg{
-  font-size:33px;font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2",serif;
-  color:var(--c);display:block;line-height:1.2;text-shadow:0 0 22px color-mix(in srgb, var(--c) 60%, transparent);
-}
-.cmp-sign .cn{font-size:15.5px;font-weight:640;display:block;margin-top:1px}
-.cmp-sign .cs{font-size:10.5px;color:var(--muted);letter-spacing:.13em;text-transform:uppercase;display:block;margin-top:2px}
-.cmp-mid{text-align:center;min-width:96px}
-.cmp-angle{
-  font-size:22px;font-weight:300;color:var(--accent);letter-spacing:-.02em;line-height:1;
-  font-family:"Segoe UI Symbol","Apple Symbols",serif;
-}
-.cmp-asp{font-size:10px;letter-spacing:.17em;text-transform:uppercase;color:var(--text-2);font-weight:700;margin-top:5px}
-.cmp-deg{font-size:10px;color:var(--faint);margin-top:2px;letter-spacing:.08em}
-
-.aspect-def{
-  font-size:13px;color:var(--text-2);margin:14px 0 20px;padding:12px 13px;
-  border-radius:var(--radius-sm);border:1px solid var(--stroke);
-  background:linear-gradient(135deg, rgba(167,139,250,.10), rgba(99,211,255,.05));
-}
-.sim-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}
-.sim-list li{
-  font-size:13px;color:var(--text-2);display:flex;gap:10px;align-items:flex-start;
-  background:rgba(80,230,170,.055);border:1px solid rgba(80,230,170,.20);
-  border-radius:var(--radius-sm);padding:10px 12px;
-}
-.sim-list li .ic{color:#6ef0b4;flex:none;font-size:12px;line-height:1.4;font-weight:700}
-.sim-list li b{color:#c9ffe8;font-weight:640}
-.sim-list li.none{background:rgba(255,255,255,.035);border-color:var(--stroke)}
-.sim-list li.none .ic{color:var(--muted)}
-
-.diff-table{width:100%;border-collapse:collapse;font-size:12.5px}
-.diff-table th{
-  text-align:left;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--faint);font-weight:750;padding:0 8px 8px;border-bottom:1px solid var(--stroke);
-}
-.diff-table th:first-child{width:82px}
-.diff-table td{padding:9px 8px;border-bottom:1px solid rgba(160,175,255,.07);vertical-align:top;color:var(--text-2)}
-.diff-table td.lbl{color:var(--faint);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;padding-top:11px}
-.diff-table tr.match td:not(.lbl){color:#8ef0c4}
-.diff-table td.a{border-right:1px solid rgba(160,175,255,.07)}
-
-.balance p{font-size:13.5px;color:var(--text-2);margin:0 0 12px}
-.balance p:last-child{margin-bottom:0}
-.balance .lends{
-  display:grid;gap:9px;margin:14px 0 0;
-}
-.lend{
-  display:flex;gap:11px;align-items:flex-start;font-size:12.8px;color:var(--text-2);
-  border-left:2px solid var(--lc);padding:2px 0 2px 12px;
-}
-.lend b{color:var(--lc);font-weight:660}
-.axis-quote{
-  margin:16px 0 0;padding:13px 14px;border-radius:var(--radius-sm);
-  background:linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
-  border:1px solid var(--stroke-2);
-}
-.axis-quote .axh{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:750;margin-bottom:6px}
-.axis-quote p{margin:0;font-size:13px;color:var(--text-2)}
-
-.sel-strip{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
-.sel-pill{
-  display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;
-  padding:4px 6px 4px 10px;border-radius:999px;
-  background:color-mix(in srgb, var(--c) 16%, transparent);
-  border:1px solid color-mix(in srgb, var(--c) 45%, transparent);
-}
-@supports not (background: color-mix(in srgb, red 10%, transparent)){
-  .sel-pill{background:rgba(255,255,255,.08);border-color:var(--stroke-2)}
-}
-.sel-pill button{
-  appearance:none;border:0;background:rgba(0,0,0,.35);color:var(--text);
-  width:16px;height:16px;border-radius:50%;cursor:pointer;font-size:10px;line-height:1;
-  display:grid;place-items:center;padding:0;
-}
-.sel-pill button:hover{background:rgba(255,90,110,.7)}
-.empty-hint{font-size:11.5px;color:var(--faint);letter-spacing:.05em}
-
-footer.foot{
-  margin-top:26px;text-align:center;font-size:11px;color:var(--faint);letter-spacing:.09em;
-}
-
-@media (prefers-reduced-motion: reduce){
-  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
-}
-</style>
-</head>
-<body>
-<div id="stars" aria-hidden="true"></div>
-
-<div class="shell">
-  <header class="masthead">
-    <div class="brand">
-      <div class="sigil" aria-hidden="true">✶</div>
-      <div>
-        <h1>Cosmic Atlas of the Twelve Signs</h1>
-        <p class="tagline">Elements · Modalities · Polarities · Ruling Bodies</p>
-      </div>
-    </div>
-    <p class="masthead-note">
-      A geometric map of the tropical zodiac. Every line drawn here is a real angular
-      relationship — trines at 120°, squares at 90°, oppositions at 180°.
-    </p>
-  </header>
-
-  <div class="app">
-    <!-- ============ LEFT: controls + wheel ============ -->
-    <div>
-      <section class="card controls" aria-label="Cosmic filters">
-        <div class="controls-top">
-          <div class="controls-title">Cosmic Filters</div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap">
-            <button class="chip ghost" id="btnAll" type="button">Reveal all aspects</button>
-            <button class="chip ghost" id="btnClear" type="button">Clear</button>
-          </div>
-        </div>
-
-        <div class="ctl-row">
-          <div class="ctl-group">
-            <div class="ctl-label"><span class="geo">△</span> Trines · Elements <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">120°</span></div>
-            <div class="chips" id="elemChips"></div>
-          </div>
-
-          <div class="ctl-group">
-            <div class="ctl-label"><span class="geo">□</span> Squares · Modalities <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">90°</span></div>
-            <div class="chips" id="modChips"></div>
-          </div>
-
-          <div class="ctl-group">
-            <div class="ctl-label"><span class="geo">↔</span> Oppositions · Polarity Axes <span style="letter-spacing:.05em;text-transform:none;font-weight:500;opacity:.7">180°</span></div>
-            <div class="chips" id="oppChips"></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="card wheel-card" aria-label="Zodiac wheel">
-        <div class="wheel-wrap">
-          <svg id="wheel" viewBox="0 0 820 820" role="application"
-               aria-label="Interactive zodiac wheel with twelve signs">
-            <defs>
-              <radialGradient id="voidGrad" cx="50%" cy="46%" r="62%">
-                <stop offset="0%"  stop-color="#161c46" stop-opacity=".85"/>
-                <stop offset="52%" stop-color="#0a0e2a" stop-opacity=".72"/>
-                <stop offset="100%" stop-color="#04050f" stop-opacity=".35"/>
-              </radialGradient>
-              <radialGradient id="hubGrad" cx="50%" cy="40%" r="60%">
-                <stop offset="0%" stop-color="rgba(167,139,250,.42)"/>
-                <stop offset="60%" stop-color="rgba(40,30,110,.28)"/>
-                <stop offset="100%" stop-color="rgba(6,8,22,.05)"/>
-              </radialGradient>
-              <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
-                <feGaussianBlur stdDeviation="4" result="b"/>
-                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-            </defs>
-
-            <g id="layer-bg"></g>
-            <g id="layer-aspects"></g>
-            <g id="layer-pair"></g>
-            <g id="layer-nodes"></g>
-            <g id="layer-hub"></g>
-          </svg>
-        </div>
-        <div class="legend" id="legend"></div>
-      </section>
-    </div>
-
-    <!-- ============ RIGHT: panel ============ -->
-    <aside class="card panel" aria-live="polite">
-      <div class="panel-head">
-        <h2 id="panelTitle">The Wheel</h2>
-        <div class="sel-strip" id="selStrip"><span class="empty-hint">No signs selected</span></div>
-      </div>
-      <div class="panel-body" id="panelBody"></div>
-    </aside>
-  </div>
-
-  <footer class="foot">Tropical zodiac · Classical rulerships after Ptolemy · Modern rulerships after the outer-planet discoveries of 1781, 1846 &amp; 1930</footer>
-</div>
-
-<script>
 "use strict";
 /* ============================================================================
    1. DATA — the twelve signs, with full celestial ruling-body profiles
@@ -853,6 +311,136 @@ const posOf = (i) => {
 const dist = (i, j) => { const d = Math.abs(i - j); return Math.min(d, 12 - d); };
 const idxOf = (id) => SIGNS.findIndex(s => s.id === id);
 const ord = (n) => { const t=["th","st","nd","rd"], v=n%100; return n + (t[(v-20)%10] || t[v] || t[0]); };
+
+/* ============================================================================
+   2b. COMPATIBILITY ENGINE
+   A transparent, additive 100-point model. Every term is derived from the
+   structure of the wheel itself, so the number can always be taken apart.
+   ==========================================================================*/
+
+/* Angular relationship — the dominant term (max 40). */
+const ASPECT_SCORE = { 0:30, 1:18, 2:33, 3:20, 4:38, 5:15, 6:28 };
+
+/* Elemental temperament (max 25). Fire+Air and Earth+Water are the two
+   classical complementary pairings; same-element is fluent but redundant. */
+const ELEMENT_PAIR = {
+  "Air|Air":22, "Earth|Earth":22, "Fire|Fire":22, "Water|Water":22,
+  "Air|Fire":25, "Earth|Water":25,
+  "Earth|Fire":11, "Fire|Water":8, "Air|Earth":10, "Air|Water":12
+};
+
+/* Modal tempo (max 15). Matching modality means competing for the same
+   moment; staggered modalities cover for one another. */
+const MODALITY_PAIR = {
+  same:6, "Cardinal|Fixed":11, "Cardinal|Mutable":14, "Fixed|Mutable":13
+};
+
+/* Classical planetary sympathy between the two signs' traditional rulers
+   (max 10). The outer planets have no traditional friendship table, so the
+   affinity term is computed on the seven classical bodies only. */
+const PLANET_AFFINITY = {
+  Sun:     { Sun:10, Moon:8,  Mercury:6,  Venus:7,  Mars:7,  Jupiter:9,  Saturn:3  },
+  Moon:    { Sun:8,  Moon:10, Mercury:6,  Venus:9,  Mars:4,  Jupiter:8,  Saturn:4  },
+  Mercury: { Sun:6,  Moon:6,  Mercury:10, Venus:8,  Mars:5,  Jupiter:6,  Saturn:6  },
+  Venus:   { Sun:7,  Moon:9,  Mercury:8,  Venus:10, Mars:7,  Jupiter:9,  Saturn:5  },
+  Mars:    { Sun:7,  Moon:4,  Mercury:5,  Venus:7,  Mars:10, Jupiter:6,  Saturn:4  },
+  Jupiter: { Sun:9,  Moon:8,  Mercury:6,  Venus:9,  Mars:6,  Jupiter:10, Saturn:5  },
+  Saturn:  { Sun:3,  Moon:4,  Mercury:6,  Venus:5,  Mars:4,  Jupiter:5,  Saturn:10 }
+};
+
+const BANDS = [
+  { min:85, name:"Natural Resonance", hex:"#3fdc8b",
+    blurb:"These two run on the same current. Understanding arrives before it is asked for — the work is making sure something still gets challenged." },
+  { min:70, name:"Magnetic Polarity", hex:"#4fe6d0",
+    blurb:"Strong pull with real charge in it. The attraction is structural, and so is the friction; this pairing is rarely lukewarm." },
+  { min:55, name:"Conscious Translation", hex:"#ffd35e",
+    blurb:"Workable, but nothing is automatic. Every point of contact has to be interpreted rather than assumed." },
+  { min:45, name:"Productive Friction", hex:"#ff9f43",
+    blurb:"Genuinely difficult and genuinely useful. The pressure is structural, not personal — and it is the kind that produces movement." },
+  { min:0,  name:"High Effort", hex:"#ff5f45",
+    blurb:"Almost nothing in common at the structural level. This pairing can work, but only deliberately, and only with both parties translating in good faith." }
+];
+const bandOf = (n) => BANDS.find(b => n >= b.min);
+
+function classicalRuler(s){
+  const r = s.rulers.find(x => x.type === "trad" || x.type === "both");
+  return r ? r.body.replace(VS15, "") : "Sun";
+}
+
+const _compatCache = {};
+function compat(i, j){
+  const key = Math.min(i,j) + "-" + Math.max(i,j);
+  if (_compatCache[key]) return _compatCache[key];
+
+  const a = SIGNS[i], b = SIGNS[j];
+  const dd = dist(i, j);
+  const asp = ASPECTS[dd];
+
+  const aspPts = ASPECT_SCORE[dd];
+  const elPts  = ELEMENT_PAIR[[a.element, b.element].sort().join("|")];
+  const modPts = a.modality === b.modality
+    ? MODALITY_PAIR.same
+    : MODALITY_PAIR[[a.modality, b.modality].sort().join("|")];
+  const polPts = a.polarity === b.polarity ? 10 : 6;
+  const ra = classicalRuler(a), rb = classicalRuler(b);
+  const rulPts = PLANET_AFFINITY[ra][rb];
+
+  const total = aspPts + elPts + modPts + polPts + rulPts;
+
+  const soft = (dd === 4 || dd === 2);
+  const aspNote = asp.name + " · " + asp.deg + " — " +
+    (dd === 6 ? "polarised, high charge"
+     : dd === 0 ? "identical, no distance to negotiate"
+     : soft ? "flowing, low resistance" : "friction-bearing");
+
+  let elNote;
+  if (a.element === b.element){
+    elNote = "Both " + a.element + " — one shared language, no translation required.";
+  } else if (elPts === 25){
+    elNote = a.element + " and " + b.element + " — complementary. " +
+      (elPts === 25 && (a.element === "Fire" || b.element === "Fire")
+        ? "Air feeds fire; fire gives air something to carry."
+        : "Water gives earth something to grow; earth gives water a shape.");
+  } else {
+    elNote = a.element + " (" + ELEMENTS[a.element].temper + ") against " +
+      b.element + " (" + ELEMENTS[b.element].temper + ") — temperaments that do not naturally mix.";
+  }
+
+  const modNote = a.modality === b.modality
+    ? "Both " + a.modality + " — identical tempo, so they compete for the same moment."
+    : a.modality + " and " + b.modality + " — staggered tempos that cover for each other.";
+
+  const polNote = a.polarity === b.polarity
+    ? "Both " + a.polarity + " — the same fundamental orientation."
+    : a.polarity + " meets " + b.polarity + " — opposite orientation, magnetic but effortful.";
+
+  const rulNote = ra === rb
+    ? "Shared classical ruler — " + (PLANET_GLYPH[ra] || "") + " " + ra + ". The deepest kinship available on the wheel."
+    : (PLANET_GLYPH[ra] || "") + " " + ra + " and " + (PLANET_GLYPH[rb] || "") + " " + rb + " — " +
+      (rulPts >= 8 ? "classical sympathy." : rulPts >= 6 ? "neutral regard." : "classical antipathy.");
+
+  const out = {
+    total: total,
+    band: bandOf(total),
+    aspect: asp,
+    parts: [
+      { label:"Angular aspect",   value:aspPts, max:40, note:aspNote },
+      { label:"Elemental blend",  value:elPts,  max:25, note:elNote  },
+      { label:"Modal tempo",      value:modPts, max:15, note:modNote },
+      { label:"Polarity",         value:polPts, max:10, note:polNote },
+      { label:"Ruler affinity",   value:rulPts, max:10, note:rulNote }
+    ]
+  };
+  _compatCache[key] = out;
+  return out;
+}
+
+/* ranked list of every other sign, best first */
+function rankFor(i){
+  return SIGNS.map((s, j) => j === i ? null : { i:j, sign:s, c:compat(i, j) })
+              .filter(Boolean)
+              .sort((x, y) => y.c.total - x.c.total);
+}
 const elColor = (s) => ELEMENTS[s.element].hex;
 
 /* ============================================================================
@@ -862,7 +450,9 @@ const state = {
   elements: new Set(),
   modalities: new Set(),
   oppositions: new Set(),   // "all" or individual axis keys
-  selection: []             // up to two sign indices
+  selection: [],            // up to two sign indices
+  rays: false,              // compatibility rays from a single selected sign
+  matrix: false             // full 12x12 compatibility matrix in the panel
 };
 
 const layerBg     = document.getElementById("layer-bg");
@@ -877,8 +467,19 @@ const selStrip    = document.getElementById("selStrip");
 /* ============================================================================
    4. STARFIELD
    ==========================================================================*/
+/* Honour reduced-motion in JS as well as CSS: don't create 170 animated
+   layers at all if the user has asked for less movement. */
+var REDUCE_MOTION = (function(){
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+  catch (e){ return false; }
+})();
+
+/* Smooth scrolling is motion too — one helper so every call site agrees. */
+function scrollBehavior(){ return REDUCE_MOTION ? "auto" : "smooth"; }
+
 (function starfield(){
   const host = document.getElementById("stars");
+  if (REDUCE_MOTION) return;
   const frag = document.createDocumentFragment();
   for (let i = 0; i < 170; i++){
     const s = document.createElement("i");
@@ -1072,6 +673,45 @@ function renderAspects(){
 
 function renderPair(){
   layerPair.textContent = "";
+
+  /* compatibility rays: one selected sign -> all eleven others */
+  if (state.rays && state.selection.length === 1){
+    const i = state.selection[0];
+    const p = posOf(i);
+    SIGNS.forEach((_, j) => {
+      if (j === i) return;
+      const c = compat(i, j);
+      const q = posOf(j);
+      const dx = q.x - p.x, dy = q.y - p.y, full = Math.hypot(dx, dy);
+      const ux = dx/full, uy = dy/full, pad = NODE_R + 7;
+      const x1 = p.x + ux*pad, y1 = p.y + uy*pad;
+      const x2 = q.x - ux*pad, y2 = q.y - uy*pad;
+      const L = Math.max(1, full - pad*2);
+      const t = (c.total - 40) / 55;                 // 0 (worst) .. 1 (best)
+
+      const line = el("line", { class:"ray", x1, y1, x2, y2 });
+      line.setAttribute("stroke", c.band.hex);
+      line.setAttribute("stroke-width", (1 + t * 3).toFixed(2));
+      line.style.opacity = (0.32 + t * 0.55).toFixed(2);
+      line.style.filter = "drop-shadow(0 0 5px " + c.band.hex + "AA)";
+      line.style.strokeDasharray = L + " " + L;
+      line.style.strokeDashoffset = L;
+      line.style.transition = "stroke-dashoffset .8s cubic-bezier(.2,.75,.25,1) " + (j * 35) + "ms";
+      layerPair.appendChild(line);
+      requestAnimationFrame(() => requestAnimationFrame(() => { line.style.strokeDashoffset = "0"; }));
+
+      /* anchor the label a fixed distance back from the target node, so short
+         and long rays both label legibly next to the sign they refer to */
+      const back = Math.min(36, L * 0.42);
+      const lx = x2 - ux * back, ly = y2 - uy * back;
+      const num = el("text", { class:"ray-num", x: lx.toFixed(1), y: (ly + 4).toFixed(1) });
+      num.setAttribute("fill", c.band.hex);
+      num.textContent = c.total;
+      layerPair.appendChild(num);
+    });
+    return;
+  }
+
   if (state.selection.length !== 2) return;
   const [i, j] = state.selection;
   const p = posOf(i), q = posOf(j);
@@ -1156,6 +796,23 @@ function chip(label, colorVar, pressed){
   }
   window.__syncOppChips = syncOppChips;
 
+  const raysBtn = document.getElementById("btnRays");
+  raysBtn.style.setProperty("--chipc", "#a78bfa");
+  raysBtn.addEventListener("click", () => {
+    state.rays = !state.rays;
+    raysBtn.setAttribute("aria-pressed", state.rays);
+    renderPair();
+  });
+
+  const mxBtn = document.getElementById("btnMatrix");
+  mxBtn.style.setProperty("--chipc", "#63d3ff");
+  mxBtn.addEventListener("click", () => {
+    state.matrix = !state.matrix;
+    if (state.matrix) state.selection = [];
+    mxBtn.setAttribute("aria-pressed", state.matrix);
+    syncAll();
+  });
+
   document.getElementById("btnAll").addEventListener("click", () => {
     Object.keys(ELEMENTS).forEach(n => state.elements.add(n));
     Object.keys(MODALITIES).forEach(n => state.modalities.add(n));
@@ -1164,7 +821,7 @@ function chip(label, colorVar, pressed){
   });
   document.getElementById("btnClear").addEventListener("click", () => {
     state.elements.clear(); state.modalities.clear(); state.oppositions.clear();
-    state.selection = [];
+    state.selection = []; state.matrix = false;
     syncChips(); renderAspects(); syncAll();
   });
 })();
@@ -1193,25 +850,89 @@ function syncChips(){
    10. SELECTION
    ==========================================================================*/
 function toggleSelect(i){
+  state.matrix = false;
   const at = state.selection.indexOf(i);
   if (at > -1) state.selection.splice(at, 1);
   else if (state.selection.length < 2) state.selection.push(i);
   else state.selection = [i];
   syncAll();
 }
-function selectPair(a, b){ state.selection = [a, b]; syncAll(); }
+function selectPair(a, b){
+  state.matrix = false; state.selection = [a, b]; syncAll();
+  if (typeof writeHash === "function" && typeof current !== "undefined" && current === "wheel")
+    writeHash("#/wheel/" + SIGNS[a].id + "+" + SIGNS[b].id, true);
+}
+
+document.addEventListener("click", function(e){
+  const t = e.target.closest("[data-try]");
+  if (t){
+    const [a, b] = t.dataset.try.split(",").map(Number);
+    selectPair(a, b);
+  }
+});
 
 function syncAll(){
+  const mxBtn = document.getElementById("btnMatrix");
+  if (mxBtn) mxBtn.setAttribute("aria-pressed", state.matrix);
   nodeEls.forEach((g, i) => g.classList.toggle("selected", state.selection.includes(i)));
   renderPair();
   setHub();
   renderSelStrip();
   renderPanel();
+  saveWheelState();
+  if (typeof announce === "function"){
+    const sel = state.selection;
+    if (state.matrix) announce("Compatibility matrix shown.");
+    else if (sel.length === 2)
+      announce(SIGNS[sel[0]].name + " and " + SIGNS[sel[1]].name + " compared.");
+    else if (sel.length === 1) announce(SIGNS[sel[0]].name + " profile shown.");
+  }
 }
+
+/* Filter chips and selection survive a reload. */
+function saveWheelState(){
+  if (typeof store !== "function") return;
+  store("wheel", {
+    elements: [...state.elements],
+    modalities: [...state.modalities],
+    oppositions: [...state.oppositions],
+    selection: state.selection.slice(),
+    rays: state.rays
+  });
+}
+
+function restoreWheelState(){
+  if (typeof load !== "function") return;
+  const s = load("wheel", null);
+  if (!s) return;
+  try {
+    state.elements    = new Set(s.elements || []);
+    state.modalities  = new Set(s.modalities || []);
+    state.oppositions = new Set(s.oppositions || []);
+    state.selection   = (s.selection || []).filter(i => i >= 0 && i < SIGNS.length);
+    state.rays        = !!s.rays;
+    const rb = document.getElementById("btnRays");
+    if (rb) rb.setAttribute("aria-pressed", state.rays);
+    syncChips(); renderAspects(); syncAll();
+  } catch (e){ /* stale shape — ignore and start clean */ }
+}
+
+/* A rotating nudge beats a dead "No signs selected" on the site's main screen. */
+const EMPTY_HINTS = [
+  ["aries", "libra", "Try Aries, then Libra — an opposition"],
+  ["taurus", "virgo", "Try Taurus, then Virgo — an earth trine"],
+  ["cancer", "aries", "Try Cancer, then Aries — a cardinal square"],
+  ["gemini", "sagittarius", "Try Gemini, then Sagittarius — a mutable axis"],
+  ["leo", "scorpio", "Try Leo, then Scorpio — a fixed square"]
+];
 
 function renderSelStrip(){
   if (!state.selection.length){
-    selStrip.innerHTML = '<span class="empty-hint">No signs selected</span>';
+    const h = EMPTY_HINTS[Math.floor(Math.random() * EMPTY_HINTS.length)];
+    const a = SIGNS.findIndex(s => s.id === h[0]);
+    const b = SIGNS.findIndex(s => s.id === h[1]);
+    selStrip.innerHTML = '<button class="empty-hint try" type="button" ' +
+      'data-try="' + a + "," + b + '">' + h[2] + " →</button>";
     return;
   }
   selStrip.innerHTML = "";
@@ -1236,12 +957,35 @@ const esc = (t) => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(
 
 function renderPanel(){
   const sel = state.selection;
-  if (sel.length === 0)      { panelTitle.textContent = "The Wheel";      panelBody.innerHTML = introHTML(); }
+  if (state.matrix)          { panelTitle.textContent = "Compatibility Matrix"; panelBody.innerHTML = matrixHTML(); }
+  else if (sel.length === 0) { panelTitle.textContent = "The Wheel";      panelBody.innerHTML = introHTML(); }
   else if (sel.length === 1) { panelTitle.textContent = "Sign Profile";   panelBody.innerHTML = profileHTML(SIGNS[sel[0]]); }
   else                       { panelTitle.textContent = "Comparison";     panelBody.innerHTML = compareHTML(SIGNS[sel[0]], SIGNS[sel[1]]); }
   panelBody.firstElementChild && panelBody.firstElementChild.classList.add("fade-in");
   panelBody.scrollTop = 0;
   wireRelButtons();
+  wireMatrix();
+  animateGauge();
+}
+
+/* fill the score ring after the markup is in the DOM */
+function animateGauge(){
+  const ring = panelBody.querySelector(".g-fill");
+  if (!ring) return;
+  const r = +ring.getAttribute("r");
+  const C = 2 * Math.PI * r;
+  const pct = +ring.dataset.score / 100;
+  ring.style.strokeDasharray = C.toFixed(2);
+  ring.style.strokeDashoffset = C.toFixed(2);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ring.style.strokeDashoffset = (C * (1 - pct)).toFixed(2);
+  }));
+}
+
+function wireMatrix(){
+  panelBody.querySelectorAll("td[data-a]").forEach(td => {
+    td.addEventListener("click", () => selectPair(+td.dataset.a, +td.dataset.b));
+  });
 }
 
 function wireRelButtons(){
@@ -1290,6 +1034,7 @@ function introHTML(){
       '<li><span class="k">Click</span><span>Select any sign to open its full profile — element, modality, house, and every celestial body that rules it.</span></li>' +
       '<li><span class="k">Click ×2</span><span>Select a second sign — or click any aspect line — to open the comparative reading: similarities, differences, and how the two balance.</span></li>' +
       '<li><span class="k">Filter</span><span>Toggle elements, modalities and polarity axes above to draw the trines, squares and oppositions across the wheel.</span></li>' +
+      '<li><span class="k">Score</span><span>Every pairing carries a 0–100 compatibility score built from five structural terms. Open the <em>Compatibility matrix</em> for all 66 at once, or switch on <em>Compatibility rays</em> and select one sign to see its ranking drawn on the wheel.</span></li>' +
     '</ul>' +
 
     '<div class="sect">' +
@@ -1351,6 +1096,7 @@ function profileHTML(s){
       '</div>' +
     '</div>' +
     '<p class="prof-drive">“' + esc(s.drive) + '”</p>' +
+    plainBlock(s) +
 
     '<dl class="meta-grid">' +
       '<div class="meta"><dt>Element</dt><dd style="color:' + c + '">' + s.element + '</dd></div>' +
@@ -1371,7 +1117,8 @@ function profileHTML(s){
 
     '<div class="sect">' +
       '<h3 class="sect-h">Core Energetic Signature</h3>' +
-      '<p class="body-copy">' + esc(s.core) + '</p>' +
+      '<details class="deeper" style="margin:0 0 12px"><summary>The long version</summary>' +
+        '<div class="dbody"><p>' + esc(s.core) + '</p></div></details>' +
       '<div class="kw">' + s.keywords.map(k => '<span>' + esc(k) + '</span>').join("") + '</div>' +
     '</div>' +
 
@@ -1380,6 +1127,24 @@ function profileHTML(s){
         s.strengths.map(x => '<li>' + esc(x) + '</li>').join("") + '</ul></div>' +
       '<div><h4 class="mini-h down">Shadow expression</h4><ul class="tick-list">' +
         s.shadows.map(x => '<li>' + esc(x) + '</li>').join("") + '</ul></div>' +
+    '</div>' +
+
+    '<div class="sect">' +
+      '<h3 class="sect-h">Compatibility Ranking</h3>' +
+      '<p class="body-copy" style="font-size:12.5px;margin-bottom:10px">Every other sign scored against ' +
+        s.name + ' on aspect, element, modality, polarity and ruler affinity. Click any row for the full reading.</p>' +
+      rankFor(i).map(r =>
+        '<button class="crow" data-sign="' + r.sign.id + '" data-pair="' + s.id + '">' +
+          '<span class="g" style="color:' + elColor(r.sign) + '">' + r.sign.glyph + '</span>' +
+          '<span class="nm">' + r.sign.name + '</span>' +
+          '<span class="bar-track"><i class="bar-fill" style="--w:' + r.c.total + '%;background:' + r.c.band.hex + '"></i></span>' +
+          '<span class="cnum" style="color:' + r.c.band.hex + '">' + r.c.total + '</span>' +
+        '</button>'
+      ).join("") +
+      '<p class="foot-note" style="font-style:normal">Best match: <b style="color:' + rankFor(i)[0].c.band.hex + '">' +
+        rankFor(i)[0].sign.name + ' (' + rankFor(i)[0].c.total + ')</b> · hardest: <b style="color:' +
+        rankFor(i)[10].c.band.hex + '">' + rankFor(i)[10].sign.name + ' (' + rankFor(i)[10].c.total + ')</b>. ' +
+        'Turn on <em>Compatibility rays</em> above to see this ranking drawn across the wheel.</p>' +
     '</div>' +
 
     '<div class="sect">' +
@@ -1395,6 +1160,143 @@ function profileHTML(s){
       '<p class="body-copy" style="font-size:12.5px;margin-bottom:8px"><b style="color:#e7ebff">Opposition (180°)</b> — the polarity axis:</p>' +
       '<div class="rel-row">' + relBtn(opp, s.id) + '</div>' +
     '</div>' +
+  '</div>';
+}
+
+/* ---------- compatibility score block ---------- */
+function scoreHTML(c){
+  const bars = c.parts.map(pt =>
+    '<div class="comp">' +
+      '<div class="comp-top"><span class="bar-lbl">' + pt.label + '</span>' +
+        '<span class="bar-val">' + pt.value + ' <span style="color:var(--faint);font-weight:500">/ ' + pt.max + '</span></span></div>' +
+      '<div class="bar-track"><i class="bar-fill" style="--w:' +
+        Math.round(pt.value / pt.max * 100) + '%;background:linear-gradient(90deg,' +
+        c.band.hex + '88,' + c.band.hex + ')"></i></div>' +
+      '<div class="bar-note">' + esc(pt.note) + '</div>' +
+    '</div>'
+  ).join("");
+
+  return '' +
+  '<div class="sect">' +
+    '<h3 class="sect-h">Compatibility Score</h3>' +
+    '<div class="score-wrap" style="--sc:' + c.band.hex + '">' +
+      '<svg class="gauge" viewBox="0 0 120 120" aria-hidden="true">' +
+        '<circle class="g-track" cx="60" cy="60" r="46"/>' +
+        '<circle class="g-fill" cx="60" cy="60" r="46" data-score="' + c.total + '"/>' +
+        '<text class="g-num" x="60" y="60">' + c.total + '</text>' +
+        '<text class="g-den" x="60" y="78">/ 100</text>' +
+      '</svg>' +
+      '<div class="score-meta">' +
+        '<div class="score-band">' + c.band.name + '</div>' +
+        '<p class="score-blurb">' + esc(c.band.blurb) + '</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="bars">' + bars + '</div>' +
+    '<details class="method">' +
+      '<summary>How this number is built</summary>' +
+      '<p>The score is additive and fully decomposable — no hidden weighting, no lookup table of ' +
+      'hand-written verdicts. Five structural terms sum to 100:</p>' +
+      '<ul>' +
+        '<li><code>Angular aspect (40)</code> — trine 38, sextile 33, conjunction 30, opposition 28, square 20, semi-sextile 18, quincunx 15.</li>' +
+        '<li><code>Elemental blend (25)</code> — complementary 25, same element 22, mixed 8–12.</li>' +
+        '<li><code>Modal tempo (15)</code> — different modalities 11–14, matching modality 6.</li>' +
+        '<li><code>Polarity (10)</code> — matching 10, opposed 6.</li>' +
+        '<li><code>Ruler affinity (10)</code> — classical sympathy between the two traditional rulers; shared ruler scores 10.</li>' +
+      '</ul>' +
+      '<p>Across all 66 sign pairs the model spans 44 (Aries–Cancer) to 92 (Gemini–Libra, Cancer–Pisces, Leo–Sagittarius). ' +
+      'Affinity uses the seven classical bodies, since Uranus, Neptune and Pluto have no traditional friendship table.</p>' +
+      '<p><em>Sun-sign compatibility is a sketch, not a chart. Real synastry compares two whole nativities — ' +
+      'Moons, Ascendants, Venus and Mars placements and the aspects between them — and routinely overturns what the Sun signs suggest.</em></p>' +
+    '</details>' +
+  '</div>';
+}
+
+/* ---------- full 12 x 12 matrix ---------- */
+let mxPick = 0;
+
+/* the other eleven signs ranked against one, for the narrow-screen view */
+function matrixRankedHTML(i){
+  const a = SIGNS[i];
+  const others = SIGNS.map((b, j) => ({ j, c: compat(i, j) }))
+    .filter(x => x.j !== i)
+    .sort((x, y) => y.c.total - x.c.total);
+  return others.map(x =>
+    '<button class="crow" data-sign="' + SIGNS[x.j].id + '" data-pair="' + a.id + '">' +
+      '<span class="g" style="color:' + elColor(SIGNS[x.j]) + '">' + SIGNS[x.j].glyph + '</span>' +
+      '<span class="nm">' + SIGNS[x.j].name + '</span>' +
+      '<span class="bar-track"><i class="bar-fill" style="--w:' + x.c.total +
+        '%;background:' + x.c.band.hex + '"></i></span>' +
+      '<span class="cnum" style="color:' + x.c.band.hex + '">' + x.c.total + '</span>' +
+    '</button>').join("");
+}
+
+document.addEventListener("change", function(e){
+  if (e.target && e.target.id === "mxPick"){
+    mxPick = +e.target.value;
+    const host = document.getElementById("mxRanked");
+    if (host) host.innerHTML = matrixRankedHTML(mxPick);
+  }
+});
+
+function matrixHTML(){
+  let head = '<tr><th></th>' + SIGNS.map(x =>
+    '<th title="' + x.name + '" style="color:' + elColor(x) + '">' + x.glyph + '</th>').join("") + '</tr>';
+
+  const rows = SIGNS.map((a, i) =>
+    '<tr><th title="' + a.name + '" style="color:' + elColor(a) + '">' + a.glyph + '</th>' +
+      SIGNS.map((b, j) => {
+        if (i === j) return '<td class="self">·</td>';
+        const c = compat(i, j);
+        return '<td data-a="' + i + '" data-b="' + j + '" title="' + a.name + ' + ' + b.name +
+               ' — ' + c.total + ', ' + c.band.name + '" style="background:' + c.band.hex + '">' +
+               c.total + '</td>';
+      }).join("") +
+    '</tr>').join("");
+
+  const legend = BANDS.map(b =>
+    '<span><b style="background:' + b.hex + '"></b>' + b.name + ' · ' + b.min + '+</span>').join("");
+
+  const ranked = [];
+  for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) ranked.push({ i, j, c: compat(i, j) });
+  ranked.sort((x, y) => y.c.total - x.c.total);
+  const listRow = (r) =>
+    '<button class="crow" data-sign="' + SIGNS[r.j].id + '" data-pair="' + SIGNS[r.i].id + '">' +
+      '<span class="g" style="color:' + elColor(SIGNS[r.i]) + '">' + SIGNS[r.i].glyph + '</span>' +
+      '<span class="nm">' + SIGNS[r.i].name + ' &amp; ' + SIGNS[r.j].name + '</span>' +
+      '<span class="bar-track"><i class="bar-fill" style="--w:' + r.c.total + '%;background:' + r.c.band.hex + '"></i></span>' +
+      '<span class="cnum" style="color:' + r.c.band.hex + '">' + r.c.total + '</span>' +
+    '</button>';
+
+  /* Narrow screens get a pick-a-sign ranked list instead of a 13-column grid
+     of 24px cells — same data, operable with a thumb. */
+  const picker =
+    '<div class="mx-narrow">' +
+      '<label class="mx-pick-label" for="mxPick">Compare a sign against the other eleven</label>' +
+      '<select id="mxPick" class="mx-pick">' +
+        SIGNS.map((s, i) =>
+          '<option value="' + i + '"' + (i === (mxPick || 0) ? " selected" : "") + '>' +
+          s.glyph + '  ' + s.name + '</option>').join("") +
+      '</select>' +
+      '<div id="mxRanked">' + matrixRankedHTML(mxPick || 0) + '</div>' +
+    '</div>';
+
+  return '' +
+  '<div>' +
+    '<p class="intro-lead">All 66 pairings, scored on the same five structural terms. ' +
+    'Click any cell to open the full comparative reading.</p>' +
+    picker +
+    '<div class="mx-wrap"><table class="mx">' + head + rows + '</table></div>' +
+    '<div class="mx-legend">' + legend + '</div>' +
+    '<div class="sect" style="margin-top:22px">' +
+      '<h3 class="sect-h">Five strongest pairings</h3>' +
+      ranked.slice(0, 5).map(listRow).join("") +
+    '</div>' +
+    '<div class="sect">' +
+      '<h3 class="sect-h">Five hardest pairings</h3>' +
+      ranked.slice(-5).reverse().map(listRow).join("") +
+    '</div>' +
+    '<p class="foot-note">A high score means less structural resistance, not more value. ' +
+    'The friction-heavy pairings at the bottom of this matrix are where most of the growth in astrology is said to happen.</p>' +
   '</div>';
 }
 
@@ -1532,12 +1434,16 @@ function compareHTML(a, b){
         '<div class="cmp-angle">' + asp.sym + '</div>' +
         '<div class="cmp-asp">' + asp.name + '</div>' +
         '<div class="cmp-deg">' + asp.deg + ' · ' + Math.abs(a.house - b.house) + ' houses</div>' +
+        '<div class="cmp-score" style="color:' + compat(ia, ib).band.hex + '">' +
+          compat(ia, ib).total + ' <span style="opacity:.6;font-weight:600">/ 100</span></div>' +
       '</div>' +
       '<div class="cmp-sign" style="--c:' + cb + '"><span class="cg">' + b.glyph + '</span>' +
         '<span class="cn">' + b.name + '</span><span class="cs">' + b.element + ' · ' + b.modality + '</span></div>' +
     '</div>' +
 
     '<p class="aspect-def">' + esc(asp.def) + '</p>' +
+
+    scoreHTML(compat(ia, ib)) +
 
     '<div class="sect">' +
       '<h3 class="sect-h">Cosmic Similarities</h3>' +
@@ -1576,11 +1482,19 @@ function compareHTML(a, b){
 
 function capitalize(t){ return t.charAt(0).toUpperCase() + t.slice(1); }
 
+
+/* ---- plain-language layer (added by the site build) ---- */
+function plainBlock(s){
+  var p = (typeof SIGNS_PLAIN !== "undefined") ? SIGNS_PLAIN[s.id] : null;
+  if (!p) return "";
+  return '<div class="plainbox" style="margin:4px 0 14px">' +
+      '<p>' + esc(p.plain) + '</p></div>' +
+    '<div class="notice calm" style="margin:0 0 16px">' +
+      '<b>Common mix-up.</b> ' + esc(p.confuse) + '</div>';
+}
+
 /* ============================================================================
    12. BOOT
    ==========================================================================*/
 syncAll();
 renderAspects();
-</script>
-</body>
-</html>

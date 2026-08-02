@@ -1,0 +1,10 @@
+# Keep source line endings stable across Windows, macOS and Linux checkouts.
+# Without this, git on Windows rewrites LF to CRLF on checkout, which shows up
+# as a whole-file diff the first time anyone commits from another platform.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff  binary
+*.woff2 binary
