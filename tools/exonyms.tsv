@@ -1,0 +1,155 @@
+# English names for places whose local name is what GeoNames stores.
+#
+# GeoNames' ASCII field gives "Munchen", never "Munich" — so without this list
+# an English speaker typing the name they actually know finds nothing. The web
+# fallback would cover it, but reaching the network for *Munich* would be a
+# poor answer. These get folded into the searchable alias field.
+#
+# Format:  <name as it appears in the data><TAB><country ISO2><TAB><English name>
+# Lines starting with # are ignored. Matching is on the folded name, so accents
+# here do not have to be exact.
+
+München	DE	Munich
+Köln	DE	Cologne
+Nürnberg	DE	Nuremberg
+Hannover	DE	Hanover
+Braunschweig	DE	Brunswick
+Wien	AT	Vienna
+Salzburg	AT	Salzburg
+Praha	CZ	Prague
+Plzeň	CZ	Pilsen
+Brno	CZ	Brunn
+Warszawa	PL	Warsaw
+Kraków	PL	Cracow
+Wrocław	PL	Breslau
+Gdańsk	PL	Danzig
+Poznań	PL	Posen
+Roma	IT	Rome
+Milano	IT	Milan
+Napoli	IT	Naples
+Firenze	IT	Florence
+Venezia	IT	Venice
+Torino	IT	Turin
+Genova	IT	Genoa
+Padova	IT	Padua
+Livorno	IT	Leghorn
+Siracusa	IT	Syracuse
+Mantova	IT	Mantua
+Sevilla	ES	Seville
+Zaragoza	ES	Saragossa
+Córdoba	ES	Cordova
+A Coruña	ES	Corunna
+Donostia-San Sebastián	ES	San Sebastian
+Lisboa	PT	Lisbon
+Porto	PT	Oporto
+München Gladbach	DE	Monchengladbach
+Aachen	DE	Aix-la-Chapelle
+Den Haag	NL	The Hague
+'s-Gravenhage	NL	The Hague
+'sHertogenbosch	NL	Bois-le-Duc
+Vlissingen	NL	Flushing
+Antwerpen	BE	Antwerp
+Brussel	BE	Brussels
+Bruxelles	BE	Brussels
+Brugge	BE	Bruges
+Gent	BE	Ghent
+Leuven	BE	Louvain
+Liège	BE	Liege
+Oostende	BE	Ostend
+København	DK	Copenhagen
+Helsingør	DK	Elsinore
+Göteborg	SE	Gothenburg
+Malmö	SE	Malmo
+Helsinki	FI	Helsingfors
+Turku	FI	Abo
+Tampere	FI	Tammerfors
+Reykjavík	IS	Reykjavik
+Athína	GR	Athens
+Athens	GR	Athina
+Thessaloníki	GR	Salonica
+Pireás	GR	Piraeus
+Iráklio	GR	Heraklion
+Ródos	GR	Rhodes
+Kérkyra	GR	Corfu
+Bucureşti	RO	Bucharest
+București	RO	Bucharest
+Timişoara	RO	Timisoara
+Cluj-Napoca	RO	Klausenburg
+Beograd	RS	Belgrade
+Zagreb	HR	Agram
+Split	HR	Spalato
+Dubrovnik	HR	Ragusa
+Rijeka	HR	Fiume
+Ljubljana	SI	Laibach
+Sofia	BG	Sofiya
+Sofiya	BG	Sofia
+Moskva	RU	Moscow
+Sankt-Peterburg	RU	Saint Petersburg
+Nizhniy Novgorod	RU	Nizhny Novgorod
+Yekaterinburg	RU	Ekaterinburg
+Kyiv	UA	Kiev
+Kiev	UA	Kyiv
+Kharkiv	UA	Kharkov
+Lviv	UA	Lvov
+Lviv	UA	Lemberg
+Odesa	UA	Odessa
+Dnipro	UA	Dnepropetrovsk
+Chişinău	MD	Kishinev
+Vilnius	LT	Wilno
+Rīga	LV	Riga
+Tallinn	EE	Reval
+Yerevan	AM	Erevan
+Tbilisi	GE	Tiflis
+İstanbul	TR	Istanbul
+Istanbul	TR	Constantinople
+İzmir	TR	Izmir
+Izmir	TR	Smyrna
+Ankara	TR	Angora
+Antakya	TR	Antioch
+Al Qāhirah	EG	Cairo
+Cairo	EG	Al Qahirah
+Al Iskandarīyah	EG	Alexandria
+Dimashq	SY	Damascus
+Ḩalab	SY	Aleppo
+Baghdād	IQ	Baghdad
+Al Başrah	IQ	Basra
+Makkah	SA	Mecca
+Al Madīnah	SA	Medina
+Jiddah	SA	Jeddah
+Tehrān	IR	Tehran
+Eşfahān	IR	Isfahan
+Mashhad	IR	Meshed
+Mumbai	IN	Bombay
+Kolkata	IN	Calcutta
+Chennai	IN	Madras
+Bengaluru	IN	Bangalore
+Puducherry	IN	Pondicherry
+Kochi	IN	Cochin
+Thiruvananthapuram	IN	Trivandrum
+Kanpur	IN	Cawnpore
+Varanasi	IN	Benares
+Vadodara	IN	Baroda
+Beijing	CN	Peking
+Nanjing	CN	Nanking
+Guangzhou	CN	Canton
+Xiamen	CN	Amoy
+Shantou	CN	Swatow
+Xi'an	CN	Sian
+Chongqing	CN	Chungking
+Tianjin	CN	Tientsin
+Qingdao	CN	Tsingtao
+Hangzhou	CN	Hangchow
+Yangon	MM	Rangoon
+Bangkok	TH	Krung Thep
+Ho Chi Minh City	VN	Saigon
+Hà Nội	VN	Hanoi
+Viangchan	LA	Vientiane
+Phnum Pénh	KH	Phnom Penh
+Jakarta	ID	Batavia
+Ujungpandang	ID	Makassar
+Seoul	KR	Seoul
+Pusan	KR	Busan
+Tōkyō	JP	Tokyo
+Ōsaka	JP	Osaka
+Kyōto	JP	Kyoto
+Kōbe	JP	Kobe

@@ -12,8 +12,11 @@ things visibly apart.
 ## Running it
 
 **Simplest — no tooling at all.** Open `index.html` in any browser.
-Everything works offline: no CDN, no web fonts, no analytics, no network calls
-of any kind.
+Everything works offline: no CDN, no web fonts, no analytics, and no network
+calls unless you explicitly ask for one. There is exactly one thing that can
+reach the network — an optional web search for places too small for the
+built-in list — and it only ever happens when you click the button that offers
+it. See [Place search](#place-search).
 
 **Recommended — over http.**
 
@@ -56,15 +59,18 @@ js/07-quiz.js             quiz bank
 js/08-signs-wheel.js      sign data and the interactive wheel
 js/09-site-core.js        router, search, theme, mobile shell
 js/10-planets-houses-aspects.js
+js/10b-place-web.js       the opt-in web place lookup — the only network code
 js/11-chart.js            chart calculation and readout
 js/12-history-quiz-glossary-tour.js
 js/13-boot.js             starts everything
-data/cities.js            ~3,000 place records, loaded on demand
+data/cities.js            ~50,000 place records, generated, loaded on demand
 sw.js                     service worker (precache, cache-first)
 manifest.json             PWA manifest
 icon.svg / icon-maskable.svg / og.svg
 serve.js                  dependency-free static server
 smoke.js                  headless test suite
+tools/build-cities.js     regenerates data/cities.js — run by hand, not a build
+tools/exonyms.tsv         English names the source data doesn't carry
 docs/IMPLEMENTATION.md    what was built, and what was deliberately left
 ```
 
@@ -73,12 +79,62 @@ scripts, numbered because they execute in order and later files depend on
 earlier ones. Splitting them out means the browser caches each part separately
 and the shell stays tiny.
 
-`data/cities.js` is loaded lazily rather than upfront. At ~100 KB it is the
-largest asset in the project and only the Chart section needs it, so it loads
-the first time someone opens that section. It arrives via a dynamic `<script>` tag
-rather than `fetch()` — deliberately, because `fetch` of a local file is
-blocked by CORS on `file://` and a classic script tag is not. A failed load
-shows a recoverable message rather than a dead form.
+`data/cities.js` is loaded lazily rather than upfront. At ~2 MB it is by a wide
+margin the largest asset in the project and only the Chart section needs it, so
+it loads the first time someone opens that section. It arrives via a dynamic
+`<script>` tag rather than `fetch()` — deliberately, because `fetch` of a local
+file is blocked by CORS on `file://` and a classic script tag is not. A failed
+load shows a recoverable message rather than a dead form.
+
+It is a generated file and carries a schema version. `js/11-chart.js` refuses a
+version it does not recognise, so a half-refreshed service worker cache reports
+a load failure rather than quietly reading fields that have moved — the sort of
+mistake that would produce a wrong chart instead of no chart.
+
+## Place search
+
+The Chart section needs a latitude, a longitude and a time zone. Those come
+from `data/cities.js`: every place in the world with a population of 5,000 or
+more, plus every national capital and first-order administrative seat whatever
+its size — about 50,000 in all, each with its region, so the eight Springfields
+in the United States are told apart rather than listed eight times identically.
+Type a region or country after the name to narrow it: `springfield il`.
+
+Accents are optional in either direction, and English exonyms work — `cologne`
+finds Köln, `munchen` finds Munich.
+
+**The web fallback.** A population floor of 5,000 still leaves out villages,
+and someone born in a village should not be told their birthplace does not
+exist. So when the built-in list comes up short, the dropdown offers one extra
+row: a button to search the web. It is worth being precise about what that
+does, because it is the only network request this site can make:
+
+- It happens **only when you click that button**. Never on typing. There is no
+  setting that changes this — "always allow" only skips the explanation.
+- It sends **only the text you typed**, to Open-Meteo's public geocoder. Not the
+  date, not the time, not anything about the chart. No cookies, no account, no
+  API key, and the referrer is suppressed.
+- The response is never cached — the service worker leaves cross-origin
+  requests alone entirely.
+- Choose **Never** and the offer disappears for good. It can be turned back on
+  from the same line.
+- It is hidden when you are offline, and when the page is opened from `file://`.
+
+Everything else keeps working with no network at all. A place found on the web
+becomes an ordinary chosen place: it saves, it shares, and a shared link
+resolves from the coordinates in the URL without going anywhere.
+
+### Regenerating the place data
+
+```
+cd tools && npm install && node build-cities.js
+```
+
+`tools/` has its own manifest, so `npm install` at the root still installs
+jsdom and nothing else, and CI never sees these packages. Place data is from
+[GeoNames](https://www.geonames.org/), CC BY 4.0; regions are ISO 3166-2; time
+zones are derived from the tz boundary shapes. The population floor is a single
+constant at the top of the script.
 
 ## Tests
 
@@ -101,14 +157,19 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**147 checks.** The suite drives the real page in a DOM and tests behaviour,
+**183 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
 against the documented April 2024 Mercury retrograde, the ayanamsa against the
 known precession rate, and offline resilience by making `history` and
-`localStorage` throw mid-run. It finishes with an end-to-end pass that renders
-every section and walks a full user journey.
+`localStorage` throw mid-run. Every one of the 50,000 place records is checked
+for shape and range, and every time zone in the file is one `Intl` accepts.
+The claims made above about the web lookup are tests, not prose: that typing
+never reaches the wire, that the first use asks, that the request carries
+nothing but the typed text, and that a failure degrades to a message. It
+finishes with an end-to-end pass that renders every section and walks a full
+user journey.
 
 CI runs it on every push and pull request.
 

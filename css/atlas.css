@@ -1367,8 +1367,22 @@ svg#adial:active{cursor:grabbing}
   display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;cursor:pointer;
   background:none;border:0;color:var(--text-2);padding:9px 13px;border-bottom:1px solid rgba(160,175,255,.07);
 }
-.ac-list button:hover,.ac-list button.hi{background:rgba(167,139,250,.2);color:#fff}
-.ac-list button small{color:var(--faint);margin-left:6px;font-size:11.5px}
+/* var(--text) rather than a hard #fff: on the light theme the highlight is a
+   pale lilac, and white on it was very nearly invisible. */
+.ac-list button:hover,.ac-list button.hi{background:rgba(167,139,250,.22);color:var(--text)}
+/* Region plus country makes this line long enough to wrap on a phone, which
+   would make every row a different height. Let it truncate instead. */
+.ac-list button small{
+  color:var(--faint);margin-left:6px;font-size:11.5px;
+  display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* Rows that came from, or offer to go to, the network — visibly not the same
+   thing as a place that shipped with the site. */
+.ac-list button.ask{color:var(--accent-2,#a78bfa)}
+.ac-list button.ask small,.ac-list button.web small{color:var(--faint);opacity:.85}
+.ac-list button.web{border-left:2px solid rgba(167,139,250,.55)}
+.field .hint .consent{display:block;line-height:1.7}
+.field .hint .consent .chip{margin-top:4px;font-size:11px;padding:2px 8px}
 
 .chart-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:24px;align-items:start}
 @media(max-width:1040px){.chart-layout{grid-template-columns:1fr}}

@@ -101,13 +101,39 @@ setTimeout(() => {
   });
   check("no CSS @import or remote url()", () =>
     !/@import/.test(cssSrc) && !/url\(\s*['"]?(https?:)?\/\//.test(cssSrc));
-  check("no fetch / XHR / Worker at runtime", () => {
-    // sw.js legitimately uses fetch; it is a service worker, not page runtime
-    const stripped = (html + "\n" + jsSrc).replace(/\/\*[\s\S]*?\*\//g, "");
-    const hits = stripped.match(/\bfetch\s*\(|XMLHttpRequest|new\s+Worker/g) || [];
+  // The site makes exactly one kind of network request: the place lookup a
+  // person can explicitly ask for. It lives alone in js/10b-place-web.js so
+  // that this test can be a filename allow-list rather than a fragile search
+  // for an approved-looking call. Everything outside that file must be unable
+  // to reach the network at all — note \bfetch\b rather than fetch\s*\(, so
+  // even passing the function around somewhere else fails here.
+  const NET_FILE = "10b-place-web.js";
+  check("the only network call is the opt-in place lookup", () => {
+    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+    const others = fs.readdirSync(path.join(__dirname, "js"))
+      .filter(f => f.endsWith(".js") && f !== NET_FILE)
+      .map(f => fs.readFileSync(path.join(__dirname, "js", f), "utf8")).join("\n");
+    const hits = strip(html + "\n" + others).match(/\bfetch\b|XMLHttpRequest|new\s+Worker/g) || [];
+    if (hits.length) throw new Error("outside " + NET_FILE + ": " + hits.join(", "));
+    return true;
+  });
+  check("no XHR or Worker anywhere, including the network file", () => {
+    const hits = jsSrc.replace(/\/\*[\s\S]*?\*\//g, "")
+      .match(/XMLHttpRequest|new\s+Worker/g) || [];
     if (hits.length) throw new Error(hits.join(", "));
     return true;
   });
+  check("the network file talks to one host and nowhere else", () => {
+    const src = fs.readFileSync(path.join(__dirname, "js", NET_FILE), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const urls = [...new Set(src.match(/https?:\/\/[^"'\s]+/g) || [])];
+    if (urls.length !== 1) throw new Error("expected one endpoint, got " + urls.join(", "));
+    if (!urls[0].startsWith("https://geocoding-api.open-meteo.com/"))
+      throw new Error(urls[0]);
+    return true;
+  });
+  check("nothing opens a connection before it is asked to", () =>
+    !/rel="(preconnect|dns-prefetch|prefetch|preload)"/.test(html));
   check("fonts are system stacks only", () => {
     const fams = allSrc.match(/font-family:[^;}"']*/g) || [];
     const remote = fams.filter(f => /googleapis|typekit|fonts\.\w/.test(f));
@@ -373,12 +399,20 @@ setTimeout(() => {
   });
 
   section("file split");
+  // Two clauses on purpose. The first catches a record pasted back into the
+  // shell; the second is the one that survives the next schema change, since a
+  // tuple-shaped regex silently stops matching the moment a field is added and
+  // would then pass for ever while guarding nothing. \b before the underscore
+  // in CITIES_SRC is not a word boundary, so that constant does not trip it.
   check("no city records bundled into the main sources", () =>
-    !/\["[A-Z][a-z]+",\d+,-?\d+\.\d+,-?\d+\.\d+,\d+\]/.test(html + jsSrc));
+    !/\["[^"]+",\d+,-?\d+(\.\d+)?,-?\d+(\.\d+)?,\d+[,\]]/.test(html + jsSrc) &&
+    !/\bvar (CITIES|TZS|CTRY|ADM)\b\s*=/.test(html + jsSrc));
   check("data/cities.js exists and parses", () => {
     const src = fs.readFileSync(path.join(__dirname, "data/cities.js"), "utf8");
     new Function(src);
-    return /var CITIES=/.test(src) && /var TZS=/.test(src) && /var CTRY=/.test(src);
+    return /var CITIES=/.test(src) && /var TZS=/.test(src) &&
+           /var CTRY=/.test(src) && /var ADM=/.test(src) &&
+           /var CITIES_FORMAT=\d+/.test(src);
   });
   check("HTML is a thin shell after the split", () => {
     const kb = Buffer.byteLength(html) / 1024;
@@ -414,6 +448,11 @@ setTimeout(() => {
     console.log("        (shell " + shell.toFixed(0) + " KB + css " + cssKb.toFixed(0) +
       " KB + js " + jsKb.toFixed(0) + " KB, plus " + dataKb.toFixed(0) +
       " KB loaded only for the chart)");
+    // The place table is lazy and precached, so it can afford to be large —
+    // but not unboundedly. Raising POP_MIN in tools/build-cities.js is the
+    // lever if this ever trips.
+    if (dataKb > 3000) throw new Error(dataKb.toFixed(0) + " KB of place data");
+    if (shell > 60) throw new Error("shell grew to " + shell.toFixed(0) + " KB");
     return true;
   });
   check("searchCities is safe before the data loads", () =>
@@ -427,21 +466,143 @@ setTimeout(() => {
       if (!served.includes("data/cities.js")) throw new Error(JSON.stringify(served));
       return true;
     });
-    check("CITIES, TZS and CTRY populated", () => {
-      if (px("CITIES.length") < 3000) throw new Error("only " + px("CITIES.length"));
+    check("CITIES, TZS, CTRY and ADM populated", () => {
+      if (px("CITIES.length") < 45000) throw new Error("only " + px("CITIES.length"));
+      if (px("ADM.length") < 1000) throw new Error("only " + px("ADM.length") + " regions");
+      if (px("ADM[0]") !== "") throw new Error("ADM[0] must be the empty region");
       return px("TZS.length") > 100 && px("CTRY.length") > 100;
     });
-    check("autocomplete finds London", () => {
+    check("every record is well formed", () => {
+      const bad = px(`(function(){
+        for (var i = 0; i < CITIES.length; i++){
+          var c = CITIES[i];
+          if (c.length !== 6 && c.length !== 7) return i + ": length " + c.length;
+          if (typeof c[0] !== "string" || !c[0]) return i + ": name";
+          if (!(c[1] >= 0 && c[1] < CTRY.length)) return i + ": country " + c[1];
+          if (!(c[2] >= -90 && c[2] <= 90)) return i + ": lat " + c[2];
+          if (!(c[3] >= -180 && c[3] <= 180)) return i + ": lon " + c[3];
+          if (!(c[4] >= 0 && c[4] < TZS.length)) return i + ": tz " + c[4];
+          if (!(c[5] >= 0 && c[5] < ADM.length)) return i + ": region " + c[5];
+          // Folded to ASCII. The punctuation is what genuinely appears in
+          // place names — "Sant'Antonio", "Basse-Terre", "Villa (Nuevo)".
+          if (c.length === 7 && !/^[a-z0-9 |'.,()\\/[\\]-]+$/.test(c[6]))
+            return i + ": alias " + c[6];
+        }
+        return "";
+      })()`);
+      if (bad) throw new Error(bad);
+      return true;
+    });
+    check("every time zone is one Intl accepts", () => {
+      const bad = px(`TZS.filter(function(z){
+        try { new Intl.DateTimeFormat("en", { timeZone: z }); return false; }
+        catch (e){ return true; }
+      }).join(", ")`);
+      if (bad) throw new Error(bad);
+      return true;
+    });
+    // Records run population-descending and nothing ships a population figure,
+    // so this ordering IS the ranking. Check it by its consequences.
+    check("records are ordered by population", () => {
+      const rank = (name, country) => px(
+        `CITIES.findIndex(function(c){ return c[0] === ${JSON.stringify(name)} && ` +
+        `CTRY[c[1]] === ${JSON.stringify(country)}; })`);
+      const pairs = [
+        ["London", "United Kingdom", "London", "Canada"],
+        ["Paris", "France", "Paris", "United States"],
+        ["Córdoba", "Argentina", "Córdoba", "Spain"]
+      ];
+      for (const [aN, aC, bN, bC] of pairs){
+        const a = rank(aN, aC), b = rank(bN, bC);
+        if (a < 0 || b < 0) throw new Error("missing " + aN + "/" + bN);
+        if (a > b) throw new Error(aN + ", " + aC + " ranked below " + bC);
+      }
+      return true;
+    });
+    check("autocomplete finds London, and the big one first", () => {
       const ids = window.searchCities("london");
       if (!ids.length) throw new Error("no matches");
       const name = px("CITIES[" + ids[0] + "][0]");
+      const country = px("CTRY[CITIES[" + ids[0] + "][1]]");
       if (!/london/i.test(name)) throw new Error("first match was " + name);
+      if (country !== "United Kingdom") throw new Error("first London was in " + country);
       return true;
     });
+
+    section("place search");
+    const names = (q) => window.searchCities(q)
+      .map(i => px("CITIES[" + i + "][0]") + "|" + px("ADM[CITIES[" + i + "][5]]") +
+                "|" + px("CTRY[CITIES[" + i + "][1]]"));
+
+    // The whole reason for the region field: eight Springfields, and no way to
+    // tell them apart before this.
+    check("duplicate names are separated by region", () => {
+      const sf = names("springfield").filter(s => /^Springfield\|/.test(s) && /United States$/.test(s));
+      if (sf.length < 4) throw new Error("only " + sf.length + " US Springfields");
+      const regions = new Set(sf.map(s => s.split("|")[1]));
+      if (regions.size !== sf.length) throw new Error("regions repeat: " + [...regions].join(", "));
+      return true;
+    });
+    check("a region narrows the query", () => {
+      const r = names("springfield il");
+      if (r.length !== 1) throw new Error(r.join(" / "));
+      return r[0] === "Springfield|Illinois|United States";
+    });
+    check("a spelled-out region narrows too", () =>
+      names("cambridge massachusetts")[0] === "Cambridge|Massachusetts|United States");
+    check("accents are optional in both directions", () => {
+      const a = window.searchCities("sao paulo"), b = window.searchCities("são paulo");
+      if (!a.length) throw new Error("no match for the unaccented spelling");
+      if (a[0] !== b[0]) throw new Error("different first match");
+      return px("CITIES[" + a[0] + "][0]") === "São Paulo";
+    });
+    check("English exonyms find the local name", () => {
+      if (names("cologne")[0] !== "Köln|North Rhine-Westphalia|Germany")
+        throw new Error(names("cologne").slice(0, 3).join(" / "));
+      if (!/^Munich\|/.test(names("munchen")[0]))
+        throw new Error(names("munchen").slice(0, 3).join(" / "));
+      return true;
+    });
+    check("a word inside a name matches", () =>
+      names("york").some(s => /^York\|/.test(s)) &&
+      window.searchCities("new york").length > 0);
+    check("a country name lists that country, biggest first", () => {
+      const r = names("france");
+      if (!/^Paris\|/.test(r[0])) throw new Error(r.slice(0, 3).join(" / "));
+      return r.filter(s => /France$/.test(s)).length > 10;
+    });
+    check("towns the old 3,000-row table never had", () => {
+      for (const q of ["oradea", "wagga wagga", "kaiserslautern", "chillicothe"])
+        if (!window.searchCities(q).length) throw new Error("no match for " + q);
+      return true;
+    });
+    // A regression here would mean going back to scanning 50,000 rows per
+    // keystroke. Generous enough not to flake on a cold CI runner.
+    check("queries stay fast at fifty thousand records", () => {
+      const qs = ["lo", "lond", "london", "spri", "springfield", "sao", "par",
+                  "new y", "york", "muni", "cam", "port", "berl", "tok"];
+      const t0 = Date.now();
+      for (let r = 0; r < 15; r++) for (const q of qs) window.searchCities(q);
+      const ms = Date.now() - t0;
+      console.log("        (" + (qs.length * 15) + " queries in " + ms + " ms)");
+      if (ms > 1500) throw new Error(ms + " ms");
+      return true;
+    });
+
     check("picking sets chosenCity", () => {
       window._pickCityIdx(window.searchCities("london")[0]);
       if (!window.chosenCity) throw new Error("not set");
       return /london/i.test(window.chosenCity.name);
+    });
+    check("picking labels the field with the region", () => {
+      window._pickCityIdx(window.searchCities("springfield il")[0]);
+      const c = window.chosenCity;
+      if (c.name !== "Springfield") throw new Error("name became " + c.name);
+      if (c.country !== "United States") throw new Error("country became " + c.country);
+      if (c.region !== "Illinois") throw new Error("region became " + c.region);
+      const shown = document.getElementById("cPlace").value;
+      if (shown !== "Springfield, Illinois, United States") throw new Error(shown);
+      return true;
     });
     check("ensureCities is idempotent", () => {
       const before = served.filter(x => x === "data/cities.js").length;
@@ -771,6 +932,44 @@ setTimeout(() => {
       window.applyChartSub(sub);
       if (window.lastChart.meta.shift !== 60) throw new Error("shift lost");
       return true;
+    });
+    // Coordinates travel in the link rather than a row index precisely so that
+    // links outlive edits to the place table. This one was written by hand in
+    // the pre-region format and must keep resolving for ever.
+    check("links shared before regions existed still resolve", () => {
+      const old = "1969-07-20|2017|29.76|-95.37|America/Chicago|placidus|Houston,United States";
+      if (!window.applyChartSub(old)) throw new Error("refused");
+      const c = window.chosenCity;
+      if (c.name !== "Houston") throw new Error("name " + c.name);
+      if (c.country !== "United States") throw new Error("country " + c.country);
+      if (c.region) throw new Error("invented a region: " + c.region);
+      if (document.getElementById("cPlace").value !== "Houston, United States")
+        throw new Error(document.getElementById("cPlace").value);
+      return true;
+    });
+    check("a region survives the round trip", () => {
+      setForm("1974-03-11", "07:45", false);
+      window._pickCityIdx(window.searchCities("springfield il")[0]);
+      const sub = window.chartToSub(window.computeChart());
+      if (!/Springfield,Illinois,United States/.test(sub)) throw new Error(sub);
+      window.chosenCity = null;
+      if (!window.applyChartSub(sub)) throw new Error("refused");
+      const c = window.chosenCity;
+      if (c.region !== "Illinois" || c.country !== "United States")
+        throw new Error(JSON.stringify(c));
+      return true;
+    });
+    // Ten place names, four regions and one country contain a comma, which is
+    // also the separator inside that field.
+    check("a comma in a place name cannot corrupt the link", () => {
+      setForm("1990-01-01", "12:00", false);
+      window.chosenCity = { name: "Washington, D. C.", region: "District, of Columbia",
+                            country: "United States", lat: 38.9, lon: -77.04,
+                            tz: "America/New_York" };
+      const sub = window.chartToSub(window.computeChart());
+      if (sub.split("|")[6].split(",").length !== 3) throw new Error(sub);
+      if (!window.applyChartSub(sub)) throw new Error("refused");
+      return window.chosenCity.country === "United States";
     });
     check("malformed subs are rejected, not crashed on", () =>
       window.applyChartSub("garbage") === false &&
@@ -1190,6 +1389,192 @@ setTimeout(() => {
       if (!document.querySelector("#qWhy.on")) throw new Error("quiz did not respond");
       return true;
     });
+    // ---------------------------------------------------------------------
+    // The opt-in web place lookup. Driven entirely through a stub transport:
+    // jsdom has no fetch, so the real code path resolves to null and stays
+    // inert until a test deliberately arms it — which is also exactly how it
+    // behaves for a browser with no network.
+    // ---------------------------------------------------------------------
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const inp = () => document.getElementById("cPlace");
+    const hint = () => document.getElementById("cPlaceHint");
+    const rowsOf = (kind) => window._placeRows().filter(r => r.kind === kind);
+
+    // Type into the field and let the 120 ms debounce settle.
+    const type = async (q) => {
+      inp().value = q;
+      inp().dispatchEvent(new window.Event("input", { bubbles: true }));
+      await sleep(220);
+    };
+    const clickConsent = (choice) => {
+      const b = hint().querySelector('[data-web="' + choice + '"]');
+      if (!b) throw new Error("no " + choice + " button: " + hint().textContent);
+      b.click();
+    };
+    const activateAsk = () => {
+      const rows = window._placeRows();
+      const k = rows.findIndex(r => r.kind === "ask");
+      if (k < 0) throw new Error("no web row offered");
+      window._placeActivate(k);
+    };
+
+    // A stub that records how it was called and answers with a canned payload.
+    const makeTransport = (payload, opts) => {
+      const calls = [];
+      const fn = (url, init) => {
+        calls.push({ url, init });
+        if (opts && opts.reject) return Promise.reject(new Error("network down"));
+        if (opts && opts.hang) return new Promise(() => {});
+        return Promise.resolve({
+          ok: true, status: 200, json: () => Promise.resolve(payload)
+        });
+      };
+      fn.calls = calls;
+      return fn;
+    };
+    const OSLO = {
+      results: [{
+        name: "Nesoddtangen", latitude: 59.8557, longitude: 10.6572,
+        timezone: "Europe/Oslo", country: "Norway", admin1: "Akershus", population: 1200
+      }]
+    };
+    // A nonsense query the built-in table cannot answer, so the web row is offered.
+    const MISS = "qqzzxx";
+
+    const webTests = async () => {
+      section("web place lookup");
+
+      window.store("placeWebLookup", "");
+      window._setPlaceTransport(null);
+
+      check("inert with no transport — this is also the offline behaviour", () =>
+        window.webLookupAvailable() === false);
+      await type(MISS);
+      check("no web row is offered when it cannot be used", () =>
+        rowsOf("ask").length === 0);
+
+      let t = makeTransport(OSLO);
+      window._setPlaceTransport(t);
+
+      await type(MISS);
+      check("a web row is offered once a search comes up short", () =>
+        rowsOf("ask").length === 1);
+      await type("london");
+      check("a query the built-in table answers gets no web row", () =>
+        rowsOf("ask").length === 0 && rowsOf("city").length > 3);
+      await type(MISS);
+
+      // The promise the whole feature rests on: typing never reaches the wire.
+      check("typing alone never calls out", () => {
+        if (t.calls.length) throw new Error(t.calls.length + " calls from typing");
+        return true;
+      });
+
+      activateAsk();
+      check("the first click asks before it sends", () => {
+        if (t.calls.length) throw new Error("sent before consenting");
+        return /open-meteo\.com/.test(hint().textContent);
+      });
+
+      clickConsent("once");
+      await sleep(50);
+      check("consenting sends exactly one request", () => {
+        if (t.calls.length !== 1) throw new Error(t.calls.length + " calls");
+        return true;
+      });
+      check("the request carries only the typed text", () => {
+        const u = new URL(t.calls[0].url);
+        if (u.origin + u.pathname !== "https://geocoding-api.open-meteo.com/v1/search")
+          throw new Error(u.origin + u.pathname);
+        if (u.searchParams.get("name") !== MISS) throw new Error(u.search);
+        // nothing about the chart may travel with it
+        for (const k of [...u.searchParams.keys()])
+          if (["name", "count", "language", "format"].indexOf(k) < 0)
+            throw new Error("unexpected parameter " + k);
+        return true;
+      });
+      check("the request sends no credentials, referrer or cache entry", () => {
+        const i = t.calls[0].init;
+        if (i.credentials !== "omit") throw new Error("credentials " + i.credentials);
+        if (i.referrerPolicy !== "no-referrer") throw new Error("referrer " + i.referrerPolicy);
+        if (i.cache !== "no-store") throw new Error("cache " + i.cache);
+        return true;
+      });
+      check("results are offered as rows", () => rowsOf("web").length === 1);
+
+      check("choosing one produces an ordinary chosenCity", () => {
+        const rows = window._placeRows();
+        window._placeActivate(rows.findIndex(r => r.kind === "web"));
+        const c = window.chosenCity;
+        if (!c) throw new Error("not set");
+        if (c.name !== "Nesoddtangen") throw new Error(c.name);
+        if (c.tz !== "Europe/Oslo") throw new Error(c.tz);
+        if (c.region !== "Akershus" || c.country !== "Norway") throw new Error(JSON.stringify(c));
+        if (Math.abs(c.lat - 59.86) > 0.01) throw new Error("lat " + c.lat);
+        return inp().value === "Nesoddtangen, Akershus, Norway";
+      });
+      check("a web-sourced place charts and shares like any other", () => {
+        setForm("1980-05-05", "09:30", false);
+        const ch = window.computeChart();
+        if (!ch) throw new Error("no chart");
+        const sub = window.chartToSub(ch);
+        if (window.applyChartSub(sub) === false) throw new Error("link did not round-trip");
+        if (window.chosenCity.region !== "Akershus")
+          throw new Error("region lost: " + JSON.stringify(window.chosenCity));
+        return true;
+      });
+
+      // A result we cannot time-zone would produce a quietly wrong Ascendant.
+      window.store("placeWebLookup", "always");
+      t = makeTransport({ results: [
+        { name: "Nowhere", latitude: 1, longitude: 1, timezone: "Not/AZone", country: "X" },
+        { name: "Offworld", latitude: 999, longitude: 1, timezone: "Europe/Oslo", country: "X" },
+        { name: "Fine", latitude: 2, longitude: 2, timezone: "Europe/Oslo", country: "X" }
+      ] });
+      window._setPlaceTransport(t);
+      await type(MISS);
+      activateAsk();
+      await sleep(50);
+      check("results without a usable time zone are dropped, not offered", () => {
+        const got = rowsOf("web").map(r => r.w.name);
+        if (got.join(",") !== "Fine") throw new Error(got.join(","));
+        return true;
+      });
+      check("'always' skips the question but still needs the click", () => {
+        if (t.calls.length !== 1) throw new Error(t.calls.length + " calls");
+        return true;
+      });
+
+      t = makeTransport(null, { reject: true });
+      window._setPlaceTransport(t);
+      await type(MISS);
+      activateAsk();
+      await sleep(50);
+      check("a failed lookup degrades to a message, not an exception", () => {
+        if (!/couldn.t reach/i.test(hint().textContent)) throw new Error(hint().textContent);
+        return rowsOf("ask").length === 0;
+      });
+
+      window.store("placeWebLookup", "never");
+      t = makeTransport(OSLO);
+      window._setPlaceTransport(t);
+      await type(MISS);
+      check("'never' removes the offer entirely", () => {
+        if (window.webLookupAvailable() !== false) throw new Error("still available");
+        if (rowsOf("ask").length) throw new Error("still offered");
+        return t.calls.length === 0;
+      });
+
+      // Leave the page as we found it.
+      window.store("placeWebLookup", "");
+      window._setPlaceTransport(null);
+      await type("houston");
+      window._pickCityIdx(window.searchCities("houston")[0]);
+    };
+
+    webTests().catch((e) => {
+      check("web place lookup suite ran to completion", () => { throw e; });
+    }).then(() => {
     check("no runtime errors accumulated across the whole run", () => {
       if (errors.length) throw new Error(errors.join(" | "));
       return true;
@@ -1199,6 +1584,7 @@ setTimeout(() => {
     console.log("  " + pass + " passed, " + fail + " failed");
     if (failures.length) console.log("\n  " + failures.join("\n  "));
     process.exit(fail ? 1 : 0);
+    });
   }, (e) => {
     console.log("  FAIL  place data never loaded — " + e.message);
     console.log("\n  " + pass + " passed, " + (fail + 1) + " failed");

@@ -44,13 +44,14 @@ function localToUTCms(y, mo, d, h, mi, tz){
 }
 
 /* ------------------------------------------------------------ place data - *
-   The 3,000-city table is ~97 KB and only the Chart section needs it, so it
+   The 50,000-place table is ~2 MB and only the Chart section needs it, so it
    lives in data/cities.js and is pulled in the first time someone opens this
    page. A classic <script> tag rather than fetch(), so the site still works
    when the repo is opened straight off disk with file:// — fetch would be
    blocked by CORS there, a script tag is not.                                */
 
 var CITIES_SRC = "data/cities.js";
+var CITIES_WANT = 2;          /* the schema version this file knows how to read */
 var citiesPromise = null;
 
 function citiesLoaded(){ return typeof CITIES !== "undefined"; }
@@ -63,8 +64,16 @@ function ensureCities(){
     s.src = CITIES_SRC;
     s.async = true;
     s.onload = function(){
-      if (citiesLoaded()) resolve();
-      else reject(new Error("cities.js loaded but defined no CITIES"));
+      if (!citiesLoaded()) return reject(new Error("cities.js loaded but defined no CITIES"));
+      /* The service worker serves cache-first and revalidates each file on its
+         own schedule, so a returning visitor can briefly pair this script with
+         a cities.js from an earlier deploy. Reading moved fields out of an old
+         record would produce a chart that is quietly wrong rather than one that
+         fails — much the worse outcome — so refuse the file instead. */
+      if (typeof CITIES_FORMAT === "undefined" || CITIES_FORMAT !== CITIES_WANT){
+        return reject(new Error("cities.js is a different format"));
+      }
+      resolve();
     };
     s.onerror = function(){ reject(new Error("could not load " + CITIES_SRC)); };
     document.head.appendChild(s);
@@ -86,74 +95,355 @@ function setPlaceStatus(msg, tone){
 
 var chosenCity = null;
 
-function searchCities(q){
-  if (!citiesLoaded()) return [];
-  q = q.trim().toLowerCase();
-  if (q.length < 2) return [];
-  var starts = [], contains = [];
-  for (var i = 0; i < CITIES.length; i++){
-    var n = CITIES[i][0].toLowerCase();
-    if (n.indexOf(q) === 0) starts.push(i);
-    else if (n.indexOf(q) > 0 || CTRY[CITIES[i][1]].toLowerCase().indexOf(q) === 0) contains.push(i);
-    if (starts.length > 40) break;
-  }
-  return starts.concat(contains).slice(0, 40);
+/* Accent folding, so "Koln" finds "Köln" and "Sao Paulo" finds "São Paulo".
+   tools/build-cities.js applies exactly this transform when it bakes the alias
+   field; if the two ever drift apart, folded queries stop matching the folded
+   names in the data and the failure is silent. Keep them in step.            */
+function fold(s){
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")    /* đ Đ */
+    .replace(/[łŁ]/g, "l")    /* ł Ł */
+    .replace(/[øØ]/g, "o")    /* ø Ø */
+    .replace(/[æÆ]/g, "ae")   /* æ Æ */
+    .replace(/[œŒ]/g, "oe")   /* œ Œ */
+    .replace(/[þÞ]/g, "th")   /* þ Þ */
+    .replace(/[ðÐ]/g, "d")    /* ð Ð */
+    .replace(/ß/g, "ss")           /* ß */
+    /* Typographic apostrophes to the one on the keyboard, so N'Djamena and
+       Ra's Bayrut are reachable by someone typing them the ordinary way. */
+    .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")
+    /* Turkish dotless i, so Bagcilar is reachable from an ASCII keyboard. */
+    .replace(/\u0131/g, "i")
+    .toLowerCase();
 }
 
+/* Fifty thousand rows is too many to lowercase on every keystroke, so the work
+   happens once and the result is reused. Three parallel structures:
+
+     CNAME    every full name a record answers to — the folded name and any
+              exonym — each preceded by "|", so "does some whole name start
+              with this query" is one indexOf for "|" + query
+     CTEXT    every searchable word, space-delimited and space-padded, so
+              "does some word start with this query" is one indexOf too
+     CBUCKET  two-letter word prefix -> record indices
+
+   CBUCKET is what keeps this fast: a query only ever looks at the few thousand
+   records whose name contains a word starting with the same two letters. And
+   because it is filled by walking CITIES in order, and CITIES is sorted by
+   population, every bucket comes out ranked already — nothing sorts at query
+   time.                                                                      */
+var CNAME = null, CTEXT = null, CBUCKET = null, CFOLD = null, AFOLD = null;
+
+function buildCityIndex(){
+  if (CBUCKET) return;
+  var n = CITIES.length;
+  CNAME = new Array(n); CTEXT = new Array(n); CBUCKET = Object.create(null);
+
+  for (var i = 0; i < n; i++){
+    var c = CITIES[i];
+    /* The alias field leads with the folded name whenever it differs from a
+       plain lowercasing, which is why this never has to call normalize(). */
+    var alias = c[6] || c[0].toLowerCase();
+    CNAME[i] = "|" + alias;
+
+    var text = " " + alias.replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    CTEXT[i] = text;
+
+    var seen = "";
+    var words = text.split(" ");
+    for (var w = 0; w < words.length; w++){
+      if (words[w].length < 2) continue;
+      var p = words[w].slice(0, 2);
+      /* one entry per record per bucket, however many words share a prefix */
+      if (seen.indexOf("|" + p) >= 0) continue;
+      seen += "|" + p;
+      (CBUCKET[p] || (CBUCKET[p] = [])).push(i);
+    }
+  }
+
+  CFOLD = CTRY.map(fold);
+  AFOLD = ADM.map(fold);
+}
+
+/* Does this look like a region or country someone appended to narrow things
+   down — the "il" in "springfield il"? */
+function narrowsPlace(t){
+  var i;
+  for (i = 1; i < AFOLD.length; i++) if (AFOLD[i].indexOf(t) === 0) return true;
+  for (i = 0; i < CFOLD.length; i++) if (CFOLD[i].indexOf(t) === 0) return true;
+  return false;
+}
+
+function placeMatches(i, t){
+  var c = CITIES[i];
+  return AFOLD[c[5]].indexOf(t) === 0 || CFOLD[c[1]].indexOf(t) === 0;
+}
+
+function lookupCities(head, tail){
+  var bucket = CBUCKET[head.slice(0, 2)];
+  var whole = [], word = [], i, k;
+
+  if (bucket){
+    for (k = 0; k < bucket.length && whole.length < 40; k++){
+      i = bucket[k];
+      if (tail && !placeMatches(i, tail)) continue;
+      /* Any full name counts, not just the primary one, so "cologne" ranks
+         Köln above the Lombardy village that is actually spelt that way — both
+         are whole-name matches, and population decides between them. */
+      if (CNAME[i].indexOf("|" + head) >= 0) whole.push(i);
+      else if (word.length < 40 && CTEXT[i].indexOf(" " + head) >= 0) word.push(i);
+    }
+  }
+  var out = whole.concat(word);
+
+  /* Typing a country's whole name lists that country's cities, as it always
+     has, and now in population order — "france" opens with Paris. It has to be
+     the whole name: on a prefix, "fran" would bury Frankfurt under France. */
+  if (!tail){
+    var country = -1;
+    for (i = 0; i < CFOLD.length; i++) if (CFOLD[i] === head){ country = i; break; }
+    if (country >= 0){
+      var byCountry = [];
+      for (i = 0; i < CITIES.length && byCountry.length < 40; i++){
+        if (CITIES[i][1] === country) byCountry.push(i);
+      }
+      for (i = 0; i < out.length; i++) if (byCountry.indexOf(out[i]) < 0) byCountry.push(out[i]);
+      out = byCountry;
+    }
+  }
+  return out.slice(0, 40);
+}
+
+function searchCities(q){
+  if (!citiesLoaded()) return [];
+  var qf = fold(q).replace(/\s+/g, " ").trim();
+  if (qf.length < 2) return [];
+  buildCityIndex();
+
+  /* "springfield il", "cambridge ma", "london, ontario" — without this there
+     is no way to tell eight Springfields apart from the keyboard. Only treat
+     the last word as a narrowing term if it actually names a region or
+     country, or "new york" would search for a place called "new". */
+  var m = qf.match(/^(.+?)[\s,]+([^\s,]+)$/);
+  if (m && m[1].length >= 2 && narrowsPlace(m[2])){
+    var narrowed = lookupCities(m[1].trim(), m[2]);
+    if (narrowed.length) return narrowed;
+  }
+  return lookupCities(qf, "");
+}
+
+/* "Illinois, United States", or just "France" where no region is recorded. */
+function cityRegion(i){
+  var c = CITIES[i], a = ADM[c[5]];
+  return (a ? a + ", " : "") + CTRY[c[1]];
+}
+function cityLabel(i){ return CITIES[i][0] + ", " + cityRegion(i); }
+
+/* The same label from a chosenCity rather than a row index — used for places
+   that never came out of the table, like a restored form, a preset or a shared
+   link. region and country are both optional. */
+function placeLabel(c){
+  return [c.name].concat(c.region ? [c.region] : [], c.country ? [c.country] : []).join(", ");
+}
+
+var PLACE_HINT = "Time zone and daylight saving are handled automatically";
+
 function wirePlace(){
-  var inp = $("#cPlace"), list = $("#cPlaceList"), hi = 0, ids = [];
+  var inp = $("#cPlace"), list = $("#cPlaceList");
+  /* One list, three kinds of row: a place from the built-in table, a place
+     that came back from the web, and the button that offers to go and ask.
+     Keeping them in one array is what lets the arrow keys walk the whole
+     thing without caring where any given row came from. */
+  var rows = [], hi = 0, webBusy = false, lastQuery = "";
+
   function close(){ list.classList.remove("on"); inp.setAttribute("aria-expanded", "false"); }
+
+  function rowHTML(r, k){
+    var cls = k === hi ? "hi" : "";
+    if (r.kind === "city"){
+      return '<button type="button" data-row="' + k + '" class="' + cls + '">' +
+        E(CITIES[r.i][0]) + "<small>" + E(cityRegion(r.i)) + "</small></button>";
+    }
+    if (r.kind === "web"){
+      var tail = [r.w.region, r.w.country].filter(Boolean).join(", ");
+      return '<button type="button" data-row="' + k + '" class="web ' + cls + '">' +
+        E(r.w.name) + "<small>" + (tail ? E(tail) + " · " : "") + "from the web</small></button>";
+    }
+    return '<button type="button" data-row="' + k + '" class="ask ' + cls + '">' +
+      (webBusy ? "Searching…" : "Search the web for “" + E(r.q) + "”") +
+      "<small>sends only that text to open-meteo.com</small></button>";
+  }
+
   function draw(){
-    if (!ids.length){ close(); return; }
-    list.innerHTML = ids.map(function(i, k){
-      var c = CITIES[i];
-      return '<button type="button" data-ci="' + i + '" class="' + (k === hi ? "hi" : "") + '">' +
-        E(c[0]) + "<small>" + E(CTRY[c[1]]) + "</small></button>";
-    }).join("");
+    if (!rows.length){ close(); return; }
+    list.innerHTML = rows.map(rowHTML).join("");
     list.classList.add("on");
     inp.setAttribute("aria-expanded", "true");
   }
-  /* 3,000 cities is a linear scan plus a full dropdown rebuild — debounce it
-     so fast typing on a phone doesn't do that on every keystroke. */
+
+  /* The offer to search the web appears only when the built-in table came up
+     thin, and only as a row to click. Nothing here starts a request. */
+  function withWebOffer(found, q){
+    var out = found.map(function(i){ return { kind:"city", i:i }; });
+    if (found.length < 3 && q.length >= 3 && webLookupAvailable()){
+      out.push({ kind:"ask", q:q });
+    }
+    return out;
+  }
+
+  function runSearch(){
+    var q = inp.value.trim();
+    lastQuery = q;
+    rows = withWebOffer(searchCities(q), q);
+    hi = 0;
+    draw();
+  }
+
+  /* Even bucketed, a query plus a full dropdown rebuild is more than a phone
+     wants to do between keystrokes — and the first query also pays for the
+     index. Debounce it. */
   var acTimer = null;
   inp.addEventListener("input", function(){
     chosenCity = null;
-    setPlaceStatus("Time zone and daylight saving are handled automatically");
+    setPlaceStatus(PLACE_HINT);
     clearTimeout(acTimer);
     acTimer = setTimeout(function(){
       if (!citiesLoaded()){
         /* someone typed before the data landed — finish loading, then search */
         setPlaceStatus("Loading places…");
         ensureCities().then(function(){
-          setPlaceStatus("Time zone and daylight saving are handled automatically");
-          ids = searchCities(inp.value); hi = 0; draw();
+          setPlaceStatus(PLACE_HINT);
+          runSearch();
         }, placeLoadFailed);
         return;
       }
-      ids = searchCities(inp.value); hi = 0; draw();
+      runSearch();
     }, 120);
   });
+
   inp.addEventListener("keydown", function(e){
     if (!list.classList.contains("on")) return;
-    if (e.key === "ArrowDown"){ hi = Math.min(ids.length - 1, hi + 1); draw(); e.preventDefault(); }
+    if (e.key === "ArrowDown"){ hi = Math.min(rows.length - 1, hi + 1); draw(); e.preventDefault(); }
     else if (e.key === "ArrowUp"){ hi = Math.max(0, hi - 1); draw(); e.preventDefault(); }
-    else if (e.key === "Enter"){ e.preventDefault(); pick(ids[hi]); }
+    else if (e.key === "Enter"){ e.preventDefault(); activate(hi); }
     else if (e.key === "Escape") close();
   });
+
   list.addEventListener("click", function(e){
-    var b = e.target.closest("[data-ci]");
-    if (b) pick(+b.dataset.ci);
+    var b = e.target.closest("[data-row]");
+    if (b) activate(+b.dataset.row);
   });
+
+  /* The consent buttons live in the hint line, outside the list, so this
+     mustn't fire while someone is reaching for them. */
   inp.addEventListener("blur", function(){ setTimeout(close, 160); });
+
+  function activate(k){
+    var r = rows[k];
+    if (!r) return;
+    if (r.kind === "city") return pick(r.i);
+    if (r.kind === "web") return pickWeb(r.w);
+    if (!webBusy) askWeb(r.q);
+  }
+
+  /* region is additive and always optional. Presets, restored localStorage
+     from before this change, and shared links in the old format all produce a
+     chosenCity without one, so every reader treats it as "" when missing
+     rather than assuming it is there. */
   function pick(i){
     if (i == null) return;
     var c = CITIES[i];
-    chosenCity = { name:c[0], country:CTRY[c[1]], lat:c[2], lon:c[3], tz:TZS[c[4]] };
-    inp.value = c[0] + ", " + CTRY[c[1]];
+    chosenCity = { name:c[0], country:CTRY[c[1]], lat:c[2], lon:c[3], tz:TZS[c[4]],
+                   region:ADM[c[5]] || "" };
+    inp.value = cityLabel(i);
     close();
     showPlaceCoords(c[2], c[3], TZS[c[4]]);
   }
+
+  /* A place from the web becomes exactly the same object a place from the
+     table does. From here on nothing can tell them apart — it saves, it
+     shares, and a shared link resolves it from coordinates with no network. */
+  function pickWeb(w){
+    chosenCity = { name:w.name, country:w.country, lat:w.lat, lon:w.lon, tz:w.tz,
+                   region:w.region };
+    inp.value = placeLabel(w);
+    close();
+    showPlaceCoords(w.lat, w.lon, w.tz);
+  }
+
+  function askWeb(q){
+    if (webConsent() === "always") return doWeb(q);
+    askConsent(q);
+  }
+
+  /* Asked once, in the hint line rather than a dialog, so it doesn't snatch
+     focus in the middle of typing. */
+  function askConsent(q){
+    var hint = $("#cPlaceHint");
+    if (!hint) return;
+    hint.innerHTML =
+      '<span class="consent">Search the web for this place? Only the text you typed ' +
+      'is sent, to open-meteo.com — no cookies, no account, nothing about your chart. ' +
+      '<button type="button" class="chip ghost" data-web="once">Search once</button> ' +
+      '<button type="button" class="chip ghost" data-web="always">Always</button> ' +
+      '<button type="button" class="chip ghost" data-web="never">Never</button></span>';
+    announce("Web place search needs your permission.");
+
+    hint.querySelectorAll("[data-web]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var choice = b.dataset.web;
+        if (choice === "never"){
+          setWebConsent("never");
+          setPlaceStatus("Web place search is off. " +
+            '<button type="button" class="chip ghost" data-web="reset">Turn it back on</button>');
+          $("#cPlaceHint").querySelector("[data-web]").addEventListener("click", function(){
+            setWebConsent("");
+            setPlaceStatus(PLACE_HINT);
+            inp.focus();
+          });
+          rows = rows.filter(function(r){ return r.kind !== "ask"; });
+          draw();
+          return;
+        }
+        if (choice === "always") setWebConsent("always");
+        doWeb(q);
+      });
+    });
+  }
+
+  function doWeb(q){
+    webBusy = true;
+    draw();
+    setPlaceStatus("Searching open-meteo.com…");
+    webPlaceSearch(q, function(found){
+      webBusy = false;
+      /* A slow answer to a query nobody is looking at any more is discarded
+         rather than dropped into the list under whatever is being typed now. */
+      if (inp.value.trim() !== q) return;
+      setPlaceStatus(PLACE_HINT);
+      if (!found.length){
+        rows = rows.filter(function(r){ return r.kind !== "ask"; });
+        setPlaceStatus("Nothing came back for “" + E(q) + "”. Try a nearby larger town.", "warn");
+        draw();
+        return;
+      }
+      rows = rows.filter(function(r){ return r.kind === "city"; })
+        .concat(found.map(function(w){ return { kind:"web", w:w }; }));
+      hi = 0;
+      draw();
+      announce(found.length + " place" + (found.length === 1 ? "" : "s") + " found on the web.");
+    }, function(){
+      webBusy = false;
+      setPlaceStatus("Couldn’t reach the place search just now. " +
+        "The built-in list still works.", "warn");
+      rows = rows.filter(function(r){ return r.kind !== "ask"; });
+      draw();
+    });
+  }
+
   window._pickCityIdx = pick;
+  window._placeRows = function(){ return rows; };
+  window._placeActivate = activate;
 }
 
 function placeLoadFailed(){
@@ -391,7 +681,7 @@ function applyPreset(i){
   timeShiftMin = 0;
   syncTimeField();
   chosenCity = p.city;
-  $("#cPlace").value = p.city.name + ", " + p.city.country;
+  $("#cPlace").value = placeLabel(p.city);
   showPlaceCoords(p.city.lat, p.city.lon, p.city.tz);
   var ch = computeChart();
   if (ch){ renderChartOut(ch); saveChartInputs(); }
@@ -460,7 +750,15 @@ function chartToSub(ch){
     m.unknownTime ? "x" : m.timeStr.replace(":", ""),
     c.lat.toFixed(2), c.lon.toFixed(2), c.tz,
     ch.houseSystem === m.requested ? m.requested : m.requested,
-    (c.name + (c.country ? "," + c.country : "")).replace(/[|]/g, " ")
+    /* name,region,country — or name,country as it has always been when there
+       is no region. applyChartSub reads it back by counting the commas, so
+       links shared before regions existed still resolve. Ten place names carry
+       a comma of their own ("Washington, D. C."), as do four regions and one
+       country, so the separator has to be stripped from each part the same way
+       the field separator already is. */
+    [c.name].concat(c.region ? [c.region] : [], c.country ? [c.country] : [])
+      .map(function(s){ return String(s).replace(/[|,]/g, " ").trim(); })
+      .join(",")
   ];
   if (m.shift) parts.push(m.shift > 0 ? "p60" : "m60");
   return parts.join("|");
@@ -473,9 +771,14 @@ function applyChartSub(sub){
   var tz = p[4], house = p[5], place = p[6], shift = p[7];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(lat) || isNaN(lon)) return false;
 
+  /* Three parts is name,region,country; two is the older name,country and must
+     keep working, because every link shared before regions existed has that
+     shape and coordinates in a link are supposed to outlive the data file. */
   var nameParts = place.split(",");
   chosenCity = { name:nameParts[0] || "Shared location",
-                 country:nameParts[1] || "", lat:lat, lon:lon, tz:tz };
+                 region:nameParts.length > 2 ? nameParts[1] : "",
+                 country:(nameParts.length > 2 ? nameParts[2] : nameParts[1]) || "",
+                 lat:lat, lon:lon, tz:tz };
   $("#cDate").value = date;
   var noTime = (time === "x");
   if ($("#cNoTime")) $("#cNoTime").checked = noTime;
@@ -485,8 +788,7 @@ function applyChartSub(sub){
   syncTimeField();
   timeShiftMin = shift === "p60" ? 60 : (shift === "m60" ? -60 : 0);
   if (["whole", "placidus", "equal"].indexOf(house) > -1) $("#cHouse").value = house;
-  $("#cPlace").value = chosenCity.country
-    ? chosenCity.name + ", " + chosenCity.country : chosenCity.name;
+  $("#cPlace").value = placeLabel(chosenCity);
   showPlaceCoords(lat, lon, tz);
 
   var ch = computeChart();

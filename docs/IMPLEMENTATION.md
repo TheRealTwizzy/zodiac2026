@@ -1,7 +1,8 @@
 # Implementation status
 
 Everything in `cosmic-atlas-qol-master.md`, plus the mobile-app work and the
-file split. Run `npm test` to verify — **143 checks**.
+file split, plus the place-data work in batch five. Run `npm test` to verify —
+**183 checks**.
 
 ---
 
@@ -60,17 +61,32 @@ file split. Run `npm test` to verify — **143 checks**.
 | 7 | Tour spotlight measures after the scroll settles instead of guessing with a timeout |
 | — | **File split** — `css/atlas.css` and thirteen ordered `js/` parts. Shell is 26 KB |
 
+## Batch five — place data
+
+| § | Item |
+|---|---|
+| — | **~50,000 places, up from 3,043.** Every place at population 5,000 or above, plus every capital and first-order admin seat regardless of size. 136 US cities became 7,000-odd; Springfield, Cambridge and the other names the old table simply did not have all resolve |
+| — | **A region on every record.** ISO 3166-2, 98.4% resolved. This is what makes eight Springfields distinguishable, and it is why the field now reads `Springfield, Illinois, United States` |
+| — | **`tools/build-cities.js`** — generator, run by hand, own manifest so the root install stays jsdom-only. GeoNames places, tz boundary shapes for zones, ISO subdivisions cross-referenced by name then proximity, voted per admin area for consistency |
+| — | **Bucketed search.** A two-letter word-prefix index built once on first query. 210 queries run in about 20 ms against 50,000 records — faster than the old linear scan over 3,043 |
+| — | **Accent folding and exonyms.** `sao paulo` finds São Paulo, `cologne` finds Köln, `munchen` finds Munich, in both directions |
+| — | **Region narrowing.** `springfield il` resolves to exactly one place; the trailing word is only treated as a filter when it actually names a region or country, so `new york` is not read as a place called "new" |
+| — | **Opt-in web lookup** for places below the floor — `js/10b-place-web.js`, click-only, one endpoint, no key, asked once and remembered. See the README's Place search section; the privacy claims there are all covered by tests |
+| — | **Schema version on the data file.** The service worker revalidates each file independently, so new code could otherwise meet an old data file and read fields that had moved — producing a quietly wrong chart. The version check turns that into an ordinary recoverable load failure |
+
 ### Payload
 
 ```
-shell   26 KB
-css     76 KB
-js     404 KB
-data   104 KB   loaded only when the Chart section is opened
+shell     26 KB
+css       76 KB
+js       423 KB
+data    2,074 KB   loaded only when the Chart section is opened
 ```
 
 Previously 504 KB in one file, all parsed upfront. Now each part caches
-separately and the service worker precaches the lot for offline use.
+separately and the service worker precaches the lot for offline use. The place
+table is the one large asset, and it is lazy — nobody who does not open the
+Chart section ever downloads it.
 
 ---
 
@@ -100,6 +116,23 @@ separately and the service worker precaches the lot for offline use.
 6. The focus trap's visibility filter used `offsetParent`, which is unreliable
    inside fixed-position dialogs.
 7. `history.pushState` throwing on `file://` would have taken the router down.
+8. The place table's schema could skew against the code that reads it. The
+   service worker is cache-first and revalidates each file independently, so a
+   returning visitor could pair new JS with a cached data file whose fields had
+   moved — `TZS[undefined]`, an offset of zero, and a chart that is wrong
+   without saying so. Fixed with a schema version the loader checks, plus the
+   cache bump.
+9. The guard against city records being pasted back into the main sources
+   matched a five-field tuple exactly. Adding a sixth field would have made it
+   match nothing and pass for ever while checking nothing. It now also asserts
+   that no source file declares the data globals at all, which survives the
+   next schema change.
+10. `countries-states-cities` files all 120 Northern Irish towns — Belfast,
+    Derry, Antrim — under the ISO code for North Yorkshire, consistently enough
+    that no cross-check inside the data can catch it. Corrected against the
+    GeoNames codes, which do separate the four UK countries.
+11. The autocomplete's highlighted row was `color:#fff` on a pale lilac
+    background, which the light theme made very nearly invisible.
 
 ## Testing
 
@@ -108,7 +141,7 @@ npm test
 JSDOM_PATH=/path/to/node_modules/jsdom node smoke.js
 ```
 
-143 checks across 27 sections. Where a claim can be verified independently it
+183 checks across 30 sections. Where a claim can be verified independently it
 is: aspect patterns are re-checked against raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
 against the documented April 2024 Mercury retrograde, the ayanamsa against the
