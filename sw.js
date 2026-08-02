@@ -7,7 +7,11 @@
  *
  * Bump CACHE when you ship; the old cache is dropped on activate.
  */
-const CACHE = "cosmic-atlas-v1";
+/* v2: the place table grew from 3,000 records to 50,000 and changed shape.
+   The version bump matters — this worker serves cache-first and revalidates
+   each file on its own schedule, so without it a returning visitor could pair
+   a new js/11-chart.js with a cached cities.js from the old schema. */
+const CACHE = "cosmic-atlas-v2";
 
 const PRECACHE = [
   "./",
@@ -23,6 +27,7 @@ const PRECACHE = [
   "./js/08-signs-wheel.js",
   "./js/09-site-core.js",
   "./js/10-planets-houses-aspects.js",
+  "./js/10b-place-web.js",
   "./js/11-chart.js",
   "./js/12-history-quiz-glossary-tour.js",
   "./js/13-boot.js",
@@ -60,6 +65,9 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
+  // Cross-origin requests are left entirely alone. That is deliberate and
+  // worth keeping: the opt-in web place lookup in js/10b-place-web.js is the
+  // only one there is, and its responses must never be cached or replayed.
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 

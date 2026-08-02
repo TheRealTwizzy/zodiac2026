@@ -1,5 +1,8 @@
 node_modules/
 package-lock.json
+# ...but the generator's lockfile is the point: data/cities.js has to be
+# reproducible, and a bare package-lock.json rule above matches at any depth.
+!tools/package-lock.json
 .DS_Store
 Thumbs.db
 *.log

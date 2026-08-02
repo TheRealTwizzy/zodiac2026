@@ -3,6 +3,9 @@
 # as a whole-file diff the first time anyone commits from another platform.
 * text=auto eol=lf
 
+# Generated, and one 2 MB line. Rendering a diff for it helps nobody.
+data/cities.js -diff linguist-generated=true
+
 *.png binary
 *.jpg binary
 *.ico binary
