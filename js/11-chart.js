@@ -233,20 +233,23 @@ function placeMatches(i, t){
 
 function lookupCities(head, tail){
   var bucket = CBUCKET[head.slice(0, 2)];
-  var whole = [], word = [], i, k;
+  var exact = [], whole = [], word = [], i, k;
 
   if (bucket){
-    for (k = 0; k < bucket.length && whole.length < 40; k++){
+    for (k = 0; k < bucket.length && (exact.length + whole.length) < 40; k++){
       i = bucket[k];
       if (tail && !placeMatches(i, tail)) continue;
-      /* Any full name counts, not just the primary one, so "cologne" ranks
-         Köln above the Lombardy village that is actually spelt that way — both
-         are whole-name matches, and population decides between them. */
-      if (CNAME[i].indexOf("|" + head) >= 0) whole.push(i);
+      /* Three tiers. A name that IS the query beats one that merely starts
+         with it — otherwise "victoria" answers Victoria de Durango rather than
+         Victoria. Any full name counts, not just the primary one, so "cologne"
+         ranks Köln above the Lombardy village actually spelt that way, and
+         population decides within a tier. */
+      if ((CNAME[i] + "|").indexOf("|" + head + "|") >= 0) exact.push(i);
+      else if (CNAME[i].indexOf("|" + head) >= 0) whole.push(i);
       else if (word.length < 40 && CTEXT[i].indexOf(" " + head) >= 0) word.push(i);
     }
   }
-  var out = whole.concat(word);
+  var out = exact.concat(whole, word);
 
   /* Typing a country's whole name lists that country's cities, as it always
      has, and now in population order — "france" opens with Paris. It has to be
@@ -272,16 +275,43 @@ function searchCities(q){
   if (qf.length < 2) return [];
   buildCityIndex();
 
-  /* "springfield il", "cambridge ma", "london, ontario" — without this there
-     is no way to tell eight Springfields apart from the keyboard. Only treat
-     the last word as a narrowing term if it actually names a region or
-     country, or "new york" would search for a place called "new". */
-  var m = qf.match(/^(.+?)[\s,]+([^\s,]+)$/);
+  /* The app writes "Springfield, Illinois, United States" into this very box,
+     so that string has to find Springfield. Commas are the reliable signal:
+     the first segment is the place, anything after it narrows. Without this,
+     the label the app produced itself returned nothing at all.
+
+     Falling back to the head rather than the whole query matters just as much
+     — matching the entire string against a name can never succeed. */
+  var parts = qf.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  if (parts.length > 1){
+    var head = parts[0];
+    if (head.length >= 2){
+      /* Innermost segment first — it is the most specific. "Springfield,
+         Illinois, United States" must narrow on Illinois, not on the country,
+         or it answers with the largest Springfield in the wrong state. */
+      for (var n = 1; n < parts.length; n++){
+        if (!narrowsPlace(parts[n])) continue;
+        var byComma = lookupCities(head, parts[n]);
+        if (byComma.length) return byComma;
+      }
+      var plain = lookupCities(head, "");
+      if (plain.length) return plain;
+    }
+  }
+
+  /* No commas: "springfield il", "cambridge ma". Try the whole query first —
+     otherwise "saint louis" is read as "saint" in a region beginning "louis"
+     (Louisiana) and never finds St. Louis. Narrowing only wins when the whole
+     query matches nothing outright. */
+  var whole = lookupCities(qf, "");
+  if (whole.length && (CNAME[whole[0]] + "|").indexOf("|" + qf + "|") >= 0) return whole;
+
+  var m = qf.match(/^(.+?)[\s]+([^\s]+)$/);
   if (m && m[1].length >= 2 && narrowsPlace(m[2])){
     var narrowed = lookupCities(m[1].trim(), m[2]);
     if (narrowed.length) return narrowed;
   }
-  return lookupCities(qf, "");
+  return whole;
 }
 
 /* "Illinois, United States", or just "France" where no region is recorded. */
@@ -1463,7 +1493,7 @@ function renderChartOut(ch){
   var m = ch.meta;
   announce("Chart calculated for " + m.dateStr +
     (m.unknownTime ? ", birth time unknown" : " at " + m.timeStr) +
-    " in " + m.city.name + ".");
+    " in " + placeLabel(m.city) + ".");
   var sunS = signOf(ch.bodies.Sun.lon), moonS = signOf(ch.bodies.Moon.lon), ascS = signOf(ch.asc);
   var offH = (m.offset >= 0 ? "+" : "−") +
     String(Math.floor(Math.abs(m.offset) / 60)).padStart(2, "0") + ":" +
@@ -1493,7 +1523,7 @@ function renderChartOut(ch){
     '<div class="notice calm">' +
       "<b>Computed for</b> " + E(m.dateStr) +
       (noTime ? " (time unknown)" : " at " + E(m.timeStr)) + " in " +
-      E(m.city.name + ", " + m.city.country) + " (UTC" + offH + ") · " +
+      E(placeLabel(m.city)) + " (UTC" + offH + ") · " +
       "that is " + E(m.utc.toISOString().slice(0, 16).replace("T", " ")) + " UTC · " +
       (noTime ? "no house system — needs a time" : E(sysName) + " houses") +
       (fellBack && !noTime ? " — <b>Placidus is undefined this far from the equator, so Whole Sign was used instead.</b>" : "") +
