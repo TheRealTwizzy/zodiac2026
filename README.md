@@ -43,11 +43,12 @@ It's a PWA. Over http you'll get an install prompt; once installed it runs
 standalone with no browser chrome and works with no network at all — the
 service worker precaches the whole site on install, with one deliberate
 exception: `data/cities.js`. At 2 MB it is most of the download, and only the
-Chart section needs it, so precaching it would have made every visitor pay for
-it on first load — including everyone who never opens Chart. It joins the
-cache the first time Chart actually asks for it, and is available offline from
-then on. The cost is stated plainly: install alone does not guarantee the
-chart works offline; one online visit to Chart does.
+city search needs it, so precaching it would have made every visitor pay for
+it on first load — including the many who never search for a city. It joins
+the cache the first time that search asks for it, and is available offline
+from then on. The cost is stated plainly: install alone does not guarantee the
+city search works offline; one online use of it does. Charting from a time
+zone — the default — never needed the file and works offline regardless.
 
 `manifest.json` also registers shortcuts straight to the chart, the wheel and
 the quiz.
@@ -91,8 +92,9 @@ earlier ones. Splitting them out means the browser caches each part separately
 and the shell stays tiny.
 
 `data/cities.js` is loaded lazily rather than upfront. At ~2 MB it is by a wide
-margin the largest asset in the project and only the Chart section needs it, so
-it loads the first time someone opens that section. It arrives via a dynamic
+margin the largest asset in the project and only the city search needs it, so
+it loads the first time someone opens that search — which most visitors never
+do, because the chart form asks for a time zone by default. It arrives via a dynamic
 `<script>` tag rather than `fetch()` — deliberately, because `fetch` of a local
 file is blocked by CORS on `file://` and a classic script tag is not. A failed
 load shows a recoverable message rather than a dead form.
@@ -136,11 +138,16 @@ the place table, **68 of the 340 zones holding more than one place put the
 Ascendant in a different sign** depending which end of the zone you were born
 at. Europe/Oslo spans 92° of Ascendant — three whole signs.
 
-So the form takes a time zone instead, on the same terms the unknown birth time
-already offers: tick the box, pick a zone, get every planet exactly right, and
+So the form **asks for a time zone by default**, on the same terms the unknown
+birth time already offers: pick a zone, get every planet exactly right, and
 have the angles and houses marked unavailable. **No city is picked on your
 behalf.** The zone list is `Intl.supportedValuesOf("timeZone")` where the browser
 has it, filtered to zones the browser can actually resolve.
+
+One link — *I know my birthplace — show my Ascendant* — swaps in the city
+search for anyone who wants the angles and the houses, and swaps back without
+losing the town you picked. That link is also what fetches `data/cities.js`, so
+the 2 MB is paid for by the people who asked for it and by nobody else.
 
 **The web fallback.** A population floor of 5,000 still leaves out villages,
 and someone born in a village should not be told their birthplace does not
@@ -221,7 +228,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**242 checks.** The suite drives the real page in a DOM and tests behaviour,
+**247 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window

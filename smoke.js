@@ -496,8 +496,37 @@ setTimeout(() => {
   check("searchCities is safe before the data loads", () =>
     Array.isArray(window.searchCities("lon")));
 
-  // Everything past here needs the lazily-loaded place data.
   go("chart");
+  // A time zone is the default answer and needs no data at all, so opening the
+  // Chart section must not drag in the 2 MB place table. Most visitors never
+  // ask for the city search, and they should never pay for it.
+  // Checked here, before any test has had a chance to move the mode — the
+  // default is the whole point and it is only observable on a fresh page.
+  check("the form opens on a time zone, not a city box", () => {
+    if (!window.inZoneMode()) throw new Error("opened in " + px("placeMode") + " mode");
+    if (!document.getElementById("cPlace").hidden) throw new Error("the city box is showing");
+    if (document.getElementById("cZone").hidden) throw new Error("the zone select is hidden");
+    // And it is usable immediately: a zone is already selected, so the form is
+    // complete without touching the place field at all.
+    if (!window.chosenCity || !window.chosenCity.zoneOnly)
+      throw new Error("no usable place on open: " + JSON.stringify(window.chosenCity));
+    return true;
+  });
+  check("opening Chart does not pull in the place table", () => {
+    if (px("citiesPromise") !== null) throw new Error("something asked for it on page open");
+    if (served.includes("data/cities.js")) throw new Error("already fetched");
+    return true;
+  });
+  check("asking for the city search is what pulls it in", () => {
+    px('placeMode = "city"');
+    window.syncPlaceMode();
+    if (px("citiesPromise") === null) throw new Error("the city search did not ask for it");
+    px('placeMode = "zone"');
+    window.syncPlaceMode();
+    return true;
+  });
+
+  // Everything past here needs the lazily-loaded place data.
   window.ensureCities().then(() => {
     section("lazy place loading");
     check("data/cities.js was actually fetched", () => {
@@ -736,11 +765,14 @@ setTimeout(() => {
     // it. Nothing observable distinguishes "started at page open" from "built
     // by the first query" once the suite has run a query of its own, so this
     // one is checked at the source.
-    check("opening the chart page is what starts the build", () => {
+    check("asking for the city search is what starts the build", () => {
       const src = fs.readFileSync(path.join(__dirname, "js/11-chart.js"), "utf8");
-      const fn = src.slice(src.indexOf("function renderChartPage"));
-      if (!/ensureCities\(\)[\s\S]{0,400}?prebuildCityIndex\(\)/.test(fn))
-        throw new Error("renderChartPage no longer starts the prebuild");
+      const fn = src.slice(src.indexOf("function wantCities"));
+      if (!/prebuildCityIndex\(\)/.test(fn.slice(0, 700)))
+        throw new Error("wantCities no longer starts the prebuild");
+      const sync = src.slice(src.indexOf("function syncPlaceMode"));
+      if (!/wantCities\(\)/.test(sync.slice(0, 2200)))
+        throw new Error("switching to the city search no longer asks for the table");
       // And a query must still finish it itself, or one that beats the idle
       // work would search a half-built index.
       const sc = src.slice(src.indexOf("function searchCities"));
@@ -1062,7 +1094,7 @@ setTimeout(() => {
     // time. Give less, and what cannot be derived is withheld, not guessed.
     {
       const zoneMode = (on) => {
-        document.getElementById("cNoPlace").checked = on;
+        px('placeMode = "' + (on ? "zone" : "city") + '"');
         window.syncPlaceMode();
       };
       check("ticking the box swaps the place box for a zone list", () => {
@@ -1084,6 +1116,26 @@ setTimeout(() => {
         zoneMode(false);
         if (lab.getAttribute("for") !== "cPlace") throw new Error("did not switch back");
         if (!/Place/.test(lab.textContent)) throw new Error("says " + lab.textContent);
+        return true;
+      });
+      // The zone is the default, and the way to the city search is a visible
+      // control rather than something you have to know about.
+      check("the swap moves between the zone and the city search, both ways", () => {
+        px('placeMode = "zone"'); window.syncPlaceMode();
+        const inp = document.getElementById("cPlace"), sel = document.getElementById("cZone");
+        const swap = document.getElementById("cPlaceSwap");
+        if (!inp.hidden) throw new Error("the city box is the default");
+        if (sel.hidden) throw new Error("the zone select is hidden by default");
+        if (!swap) throw new Error("no way through to the city search");
+        if (!/Ascendant/.test(swap.textContent))
+          throw new Error("the swap does not say what it buys: " + swap.textContent);
+        swap.click();
+        if (document.getElementById("cPlace").hidden)
+          throw new Error("clicking it did not reveal the city search");
+        if (!/time zone/i.test(swap.textContent))
+          throw new Error("no way back: " + swap.textContent);
+        swap.click();
+        if (!window.inZoneMode()) throw new Error("could not get back to the zone");
         return true;
       });
       check("every zone offered is one Intl accepts", () => {
@@ -1189,7 +1241,7 @@ setTimeout(() => {
         const c = window.chosenCity;
         if (!c.zoneOnly) throw new Error("came back as a place: " + JSON.stringify(c));
         if (c.tz !== "Asia/Tokyo") throw new Error("zone " + c.tz);
-        if (!document.getElementById("cNoPlace").checked) throw new Error("box not ticked");
+        if (!window.inZoneMode()) throw new Error("form did not switch to the zone");
         if (document.getElementById("cZone").value !== "Asia/Tokyo")
           throw new Error("select shows " + document.getElementById("cZone").value);
         if (!window.lastChart.meta.unknownPlace) throw new Error("flag lost");
@@ -1210,11 +1262,11 @@ setTimeout(() => {
         window.renderChartOut(window.computeChart());
         window.saveChartInputs();
         window.chosenCity = null;
-        document.getElementById("cNoPlace").checked = false;
+        px('placeMode = "city"');
         if (!window.restoreChartInputs()) throw new Error("restore refused");
         if (!window.chosenCity.zoneOnly) throw new Error("came back as a place");
         if (window.chosenCity.tz !== "America/Denver") throw new Error(window.chosenCity.tz);
-        if (!document.getElementById("cNoPlace").checked) throw new Error("box not re-ticked");
+        if (!window.inZoneMode()) throw new Error("form did not switch back to the zone");
         return true;
       });
       check("changing your mind gives the town back", () => {
@@ -1694,6 +1746,25 @@ setTimeout(() => {
     });
 
     section("accessibility");
+    // Measured in Chromium against the real composited background: 5.9:1 light,
+    // 11.31:1 dark. jsdom has no layout engine and cannot resolve a var() chain
+    // over alpha layers, so what is guarded here is the mechanism — the swap
+    // link must keep its own token. It was --accent-2, which is tuned for glows
+    // and borders and lands at 4.39:1 on light: under AA for 12px text.
+    check("the place swap link keeps a text-grade colour in both themes", () => {
+      const rule = (cssSrc.match(/\.swaplink\{[^}]*\}/) || [""])[0];
+      if (!rule) throw new Error("no .swaplink rule");
+      if (/color:var\(--accent-2\)/.test(rule))
+        throw new Error("back on --accent-2, which is 4.39:1 on light");
+      if (!/color:var\(--link-text\)/.test(rule))
+        throw new Error("not using --link-text: " + rule.slice(0, 120));
+      for (const scope of [/:root\{[\s\S]*?\}/, /html\[data-theme="light"\]\{[\s\S]*?\}/]){
+        const block = (cssSrc.match(scope) || [""])[0];
+        if (!/--link-text:\s*#[0-9a-f]{3,8}/i.test(block))
+          throw new Error("--link-text undefined in " + String(scope).slice(0, 32));
+      }
+      return true;
+    });
     check("a polite live region exists", () => {
       const el = document.getElementById("live");
       if (!el) throw new Error("missing #live");

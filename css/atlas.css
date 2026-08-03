@@ -40,6 +40,9 @@
   --axis:#e7ebff;
   --accent:#a78bfa;
   --accent-2:#63d3ff;
+  /* link-coloured TEXT, which needs 4.5:1 — --accent-2 is tuned for glows
+     and borders and lands at 4.39:1 on light. */
+  --link-text:#63d3ff;
 
   --radius:18px;
   --radius-sm:11px;
@@ -81,6 +84,7 @@ html[data-theme="light"]{
   --axis:#1a2142;
   --accent:#6d3ff0;
   --accent-2:#0a7fb8;
+  --link-text:#0a6a98;
 
   --shadow:0 18px 50px -22px rgba(30,40,90,.35);
   --star-op:0;
@@ -1388,6 +1392,20 @@ svg#adial:active{cursor:grabbing}
 }
 .field select option{background:#0b0f28;color:var(--text)}
 .field .hint{font-size:11px;color:var(--faint);margin-top:5px;line-height:1.45}
+/* The way between the time zone and the city search. A button, because it
+   changes what the form asks for rather than navigating anywhere — but it
+   reads as a link, because that is what "there is more here if you want it"
+   looks like. 44px of tappable height on mobile without 44px of ink. */
+.swaplink{
+  display:inline-block;margin-top:7px;padding:4px 0;
+  font:inherit;font-size:12px;font-weight:600;
+  background:none;border:0;color:var(--link-text);cursor:pointer;
+  text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:color-mix(in srgb,var(--link-text) 45%,transparent);
+}
+.swaplink:hover{color:var(--text);text-decoration-color:currentColor}
+.swaplink:focus-visible{outline:2px solid var(--accent-2);outline-offset:3px;border-radius:5px}
+@media (max-width:820px){ .swaplink{padding:13px 0;font-size:13px} }
 .ac-list{
   position:absolute;z-index:40;left:0;right:0;top:100%;margin-top:5px;max-height:260px;overflow:auto;
   background:var(--panel-solid);border:1px solid var(--stroke-2);border-radius:11px;

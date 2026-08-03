@@ -718,8 +718,10 @@ var LIMITS = [
       "nothing about them. The Ascendant, the Midheaven and the houses are the " +
       "opposite: they are functions of latitude and longitude, and a zone can span " +
       "enough of the globe to move the Ascendant two whole signs from one end to " +
-      "the other. So the chart form takes a zone if you would rather give one, and " +
-      "withholds the angles and houses rather than picking a city on your behalf." },
+      "the other. So the chart form asks for a zone by default and withholds the " +
+      "angles and houses rather than picking a city on your behalf. One link under " +
+      "the field swaps in the city search for anyone who wants them — and that link " +
+      "is also what downloads the place table, so nobody else pays for it." },
   { t:"What is kept on this device",
     d:"Calculating a chart saves the date, the time and the birthplace in this " +
       "browser, so the form is still filled in next time. It stays on this device " +

@@ -2,7 +2,7 @@
  *
  * Regenerate with:  cd tools && npm install && node build-cities.js
  *
- * Loaded on demand, the first time someone opens the Chart section. It is by
+ * Loaded on demand, the first time someone opens the city search. It is by
  * far the largest asset here and most visitors never need it, so it does not
  * travel with the page. See ensureCities() in js/11-chart.js.
  *
