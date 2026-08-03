@@ -104,7 +104,8 @@ mistake that would produce a wrong chart instead of no chart.
 
 ## Place search
 
-The Chart section needs a latitude, a longitude and a time zone. Those come
+The Chart section needs a time zone, and — for the Ascendant and the houses,
+but for nothing else — a latitude and a longitude. Those come
 from `data/cities.js`: every place in the world with a population of 5,000 or
 more, plus every national capital and first-order administrative seat whatever
 its size — about 50,000 in all, each with its region, so the eight Springfields
@@ -122,6 +123,24 @@ lands and runs in 2,000-record slices between frames, so the first query costs
 itself, so the incremental path is only ever an optimisation, never a
 correctness question — and the tests check that a sliced build produces exactly
 the index a single pass does.
+
+**Or no place at all.** Naming a town is more than the arithmetic needs and more
+than some people want to give. Every body here is geocentric, so its position
+follows from the instant alone — at the same UTC instant London and Sydney agree
+on the Sun and the Moon to nine decimal places. A time zone fixes the instant,
+and therefore fixes every planet exactly.
+
+The Ascendant, the Midheaven and the twelve houses are the opposite. They are
+functions of latitude and longitude, and a zone does not pin those down: across
+the place table, **68 of the 340 zones holding more than one place put the
+Ascendant in a different sign** depending which end of the zone you were born
+at. Europe/Oslo spans 92° of Ascendant — three whole signs.
+
+So the form takes a time zone instead, on the same terms the unknown birth time
+already offers: tick the box, pick a zone, get every planet exactly right, and
+have the angles and houses marked unavailable. **No city is picked on your
+behalf.** The zone list is `Intl.supportedValuesOf("timeZone")` where the browser
+has it, filtered to zones the browser can actually resolve.
 
 **The web fallback.** A population floor of 5,000 still leaves out villages,
 and someone born in a village should not be told their birthplace does not
@@ -202,7 +221,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**230 checks.** The suite drives the real page in a DOM and tests behaviour,
+**242 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
@@ -245,7 +264,9 @@ theme is a variable swap rather than a second stylesheet.
   database. Dates that old raise a warning, and clock times that are ambiguous
   or never existed are flagged, with a ±1 hour correction offered.
 - Without a birth time the Ascendant, the houses and the four angles are
-  withheld rather than computed from a guessed noon.
+  withheld rather than computed from a guessed noon. The same applies when a
+  time zone is given instead of a birthplace — they need a latitude, and a zone
+  is not one.
 - Inside 1900–2100 expect agreement with DE421 to better than 20 arcseconds.
   The form accepts 1600–2200; outside the core range expect arcminutes for the
   Sun, Moon and planets through Neptune.

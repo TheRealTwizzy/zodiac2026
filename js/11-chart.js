@@ -431,10 +431,25 @@ function cityRegion(i){
 }
 function cityLabel(i){ return CITIES[i][0] + ", " + cityRegion(i); }
 
+/* A place given as a bare time zone rather than a town: enough to fix the
+   instant, and therefore every planet, but carrying no coordinates — so the
+   horizon does not exist. See wireZone(). */
+function zoneOnly(c){ return !!(c && c.zoneOnly); }
+
+/* The Ascendant, the Midheaven and the twelve houses need a time AND a
+   latitude — miss either and all of them are withheld. The two gaps are
+   otherwise unrelated, which is exactly why this is one predicate rather than
+   two conditions repeated through every renderer. */
+function anglesUnknown(ch){
+  var m = ch && ch.meta;
+  return !!(m && (m.unknownTime || m.unknownPlace));
+}
+
 /* The same label from a chosenCity rather than a row index — used for places
    that never came out of the table, like a restored form, a preset or a shared
    link. region and country are both optional. */
 function placeLabel(c){
+  if (zoneOnly(c)) return "the " + String(c.tz).replace(/_/g, " ") + " time zone";
   return [c.name].concat(c.region ? [c.region] : [], c.country ? [c.country] : []).join(", ");
 }
 
@@ -684,6 +699,176 @@ function showPlaceCoords(lat, lon, tz){
     ", " + E(Math.abs(lon).toFixed(2)) + "° " + (lon >= 0 ? "E" : "W") + " · " + E(tz);
 }
 
+/* The zone-only equivalent: say what it buys and what it costs, in the same
+   line the coordinates would have occupied. */
+var ZONE_HINT = "Every planet comes from the clock alone, so this is enough for all " +
+  "of them. The Ascendant and the houses need a latitude — they will be marked " +
+  "unavailable rather than guessed.";
+function showZoneChoice(tz){
+  $("#cPlaceHint").innerHTML = "🕓 " + E(String(tz).replace(/_/g, " ")) +
+    ' <span style="color:var(--muted)">· ' + ZONE_HINT + "</span>";
+}
+
+/* ---------------------------------------------- a time zone, not a place --- *
+ * Naming a town is a lot to ask of someone who only wants to know where their
+ * planets were, and it is more than the arithmetic needs: every body here is
+ * geocentric, so its position follows from the instant alone. Measured with
+ * this engine, London and Sydney agree on the Sun and the Moon to nine decimal
+ * places at the same UTC instant.
+ *
+ * The Ascendant, the Midheaven and the houses are the exact opposite — they
+ * are functions of latitude and longitude, and a time zone does not pin those
+ * down. Across the shipped table, 68 of the 340 zones holding more than one
+ * place put the Ascendant in a DIFFERENT SIGN depending which end of the zone
+ * you were born at; Europe/Oslo spans 92° of Ascendant, three whole signs.
+ *
+ * So this is offered as the same bargain the unknown birth time already
+ * offers, and it is important that it stays that bargain rather than becoming
+ * a quiet approximation: give less, and what cannot be derived is marked
+ * unavailable. Nothing here picks a representative city for the zone.
+ */
+
+/* The last town chosen, so that ticking the box and changing your mind does
+   not cost you a birthplace you already typed. */
+var lastTownCity = null;
+
+function zoneOptions(){
+  /* Intl knows the whole tz database and costs nothing to ask. TZS is the
+     fallback for a browser without supportedValuesOf, and holds every zone any
+     place in the table uses — which is the set that matters here anyway. */
+  var list = null;
+  try {
+    if (typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function"){
+      list = Intl.supportedValuesOf("timeZone");
+    }
+  } catch (e){ list = null; }
+  if ((!list || !list.length) && typeof TZS !== "undefined" && TZS.length) list = TZS.slice();
+  if (!list || !list.length) list = ["UTC"];
+  /* Every zone offered has to be one this browser can actually resolve, or the
+     chart would be computed in the wrong one — the same check the place table
+     and the web lookup already pass. */
+  return list.filter(validTz).sort();
+}
+
+function buildZoneSelect(){
+  var sel = $("#cZone");
+  if (!sel || sel.options.length) return;
+  var now = Date.now();
+  sel.innerHTML = zoneOptions().map(function(z){
+    var off = tzOffsetMin(z, now);
+    var a = Math.abs(off === null ? 0 : off);
+    /* The current offset, because "Europe/Bucharest" means much less to most
+       people than "+03:00" does. It is today's offset, not the birth date's —
+       the chart resolves that properly from the zone itself. */
+    var label = z.replace(/_/g, " ") + "  (UTC" + (off < 0 ? "−" : "+") +
+      String(Math.floor(a / 60)).padStart(2, "0") + ":" +
+      String(a % 60).padStart(2, "0") + ")";
+    return '<option value="' + E(z) + '">' + E(label) + "</option>";
+  }).join("");
+  /* Default to this browser's own zone. It is the single likeliest answer and
+     it is not a guess about the person — just a sensible starting position. */
+  var here = "";
+  try { here = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e){}
+  if (here && validTz(here)){
+    /* supportedValuesOf returns canonical IDs and omits UTC on several engines,
+       so the browser's own zone is not guaranteed to be in the list it just
+       gave us. Add it rather than silently landing on Africa/Abidjan. */
+    if (!sel.querySelector('option[value="' + here.replace(/"/g, "") + '"]')){
+      var o = document.createElement("option");
+      o.value = here;
+      o.textContent = here.replace(/_/g, " ");
+      sel.insertBefore(o, sel.firstChild);
+    }
+    sel.value = here;
+  }
+}
+
+function setZonePlace(){
+  var sel = $("#cZone");
+  var z = sel && sel.value;
+  if (!z || !validTz(z)){ chosenCity = null; return; }
+  chosenCity = { name:z, tz:z, lat:0, lon:0, country:"", region:"", zoneOnly:true };
+  showZoneChoice(z);
+}
+
+/* Show whichever control the current mode calls for. opts.keepCity is for the
+   callers that have already decided what chosenCity is — a restored form, a
+   share link — and only want the form to match it. */
+function syncPlaceMode(opts){
+  opts = opts || {};
+  var box = $("#cNoPlace"), inp = $("#cPlace"), list = $("#cPlaceList"), sel = $("#cZone");
+  if (!box || !inp || !sel) return;
+  var on = box.checked;
+
+  if (on && chosenCity && !zoneOnly(chosenCity)) lastTownCity = chosenCity;
+  if (on) buildZoneSelect();
+
+  inp.hidden = on; inp.disabled = on; inp.required = !on;
+  sel.hidden = !on; sel.disabled = !on;
+  /* The visible label has to follow the visible control. Left pointing at the
+     hidden input it labels nothing anyone can reach, and clicking it moves
+     focus to an element that is not there. */
+  var lab = $("#cPlaceLabel");
+  if (lab){
+    lab.setAttribute("for", on ? "cZone" : "cPlace");
+    lab.textContent = on ? "Time zone" : "Place";
+  }
+  if (list) list.classList.remove("on");
+  inp.setAttribute("aria-expanded", "false");
+  inp.removeAttribute("aria-activedescendant");
+
+  if (opts.keepCity) return;
+  if (on){ setZonePlace(); return; }
+
+  /* Coming back to a place: a zone-only choice is not one any more. Restore
+     the last town rather than making someone retype a birthplace to undo a
+     checkbox. */
+  if (zoneOnly(chosenCity)) chosenCity = lastTownCity;
+  if (chosenCity){
+    inp.value = placeLabel(chosenCity);
+    showPlaceCoords(chosenCity.lat, chosenCity.lon, chosenCity.tz);
+  } else {
+    inp.value = "";
+    setPlaceStatus(PLACE_HINT);
+  }
+}
+
+/* Put whatever chosenCity already is into the form. One function, so the
+   restore path, the share-link path and the preset path cannot drift apart. */
+function showChosenPlace(){
+  if (!chosenCity) return;
+  var box = $("#cNoPlace"), sel = $("#cZone"), inp = $("#cPlace");
+  var zone = zoneOnly(chosenCity);
+  if (box) box.checked = zone;
+  syncPlaceMode({ keepCity: true });
+  if (zone){
+    if (sel){
+      /* A restored or shared zone that this browser's list does not carry —
+         an older tzdb, or the TZS fallback — still has to be selectable, or
+         the form would show one zone while the chart used another. */
+      if (!sel.querySelector('option[value="' + String(chosenCity.tz).replace(/"/g, "") + '"]')){
+        var o = document.createElement("option");
+        o.value = chosenCity.tz;
+        o.textContent = String(chosenCity.tz).replace(/_/g, " ");
+        sel.insertBefore(o, sel.firstChild);
+      }
+      sel.value = chosenCity.tz;
+    }
+    showZoneChoice(chosenCity.tz);
+  } else {
+    if (inp) inp.value = placeLabel(chosenCity);
+    showPlaceCoords(chosenCity.lat, chosenCity.lon, chosenCity.tz);
+  }
+}
+
+function wireZone(){
+  var box = $("#cNoPlace"), sel = $("#cZone");
+  if (!box || !sel) return;
+  box.addEventListener("change", function(){ syncPlaceMode(); });
+  sel.addEventListener("change", function(){ setZonePlace(); });
+  syncPlaceMode({ keepCity: !!chosenCity });
+}
+
 /* ------------------------------------------------------- saved birth data - *
    The form used to reset to 1990-06-15 on every visit. Remember what the
    person last calculated so returning to the page resumes where they were.   */
@@ -716,8 +901,11 @@ function restoreChartInputs(){
   timeShiftMin = s.shift || 0;
   syncTimeField();
   chosenCity = s.city;
-  $("#cPlace").value = s.label || s.city.name;
-  showPlaceCoords(s.city.lat, s.city.lon, s.city.tz);
+  /* Saved before the zone option existed, or saved with a town: the label is
+     the text that was in the box, and showChosenPlace would rebuild it from
+     the city anyway. Keep the stored one — it is what the person actually saw. */
+  if (!zoneOnly(chosenCity)) $("#cPlace").value = s.label || s.city.name;
+  showChosenPlace();
   return true;
 }
 
@@ -855,6 +1043,16 @@ function timeWarnings(dv, tv, city, unknownTime){
       "unavailable." });
     /* Fall through rather than return: the accuracy and Pluto notices below
        describe the ephemeris, which does not care whether a time was given. */
+  }
+  if (zoneOnly(city)){
+    out.push({ tone:"info", text:"<b>A time zone rather than a birthplace.</b> " +
+      "Every position below is computed from the instant alone, so all of them " +
+      "are exactly what they would be with a full address — the planets are " +
+      "geocentric and do not care where you stood. The Ascendant, the Midheaven " +
+      "and the houses are the opposite: they are functions of latitude and " +
+      "longitude, and within a single zone they really do differ — a zone can " +
+      "span enough longitude to move the Ascendant by two whole signs. They are " +
+      "marked unavailable." });
   }
   if (y < 1900 || y > 2100){
     out.push({ tone:"info", text:"<b>Outside 1900–2100 the fit loosens.</b> The " +
@@ -1054,9 +1252,13 @@ function computeChart(){
   }
   $("#cDateHint").textContent = "1600 to 2200 — accuracy is best near the present";
   if (!chosenCity){
-    $("#cPlaceHint").innerHTML = '<span style="color:var(--warn-text)">Pick a city from the list — ' +
-      "the Ascendant and houses need a latitude and longitude.</span>";
-    $("#cPlace").focus();
+    var zoneMode = !!($("#cNoPlace") && $("#cNoPlace").checked);
+    $("#cPlaceHint").innerHTML = '<span style="color:var(--warn-text)">' + (zoneMode
+      ? "Choose a time zone — the planets are computed from the instant, and that " +
+        "needs one."
+      : "Pick a city from the list, or tick the box below to give a time zone " +
+        "instead.") + "</span>";
+    (zoneMode ? $("#cZone") : $("#cPlace")).focus();
     return null;
   }
   /* A zone this browser cannot resolve used to fall through as UTC and produce
@@ -1076,13 +1278,21 @@ function computeChart(){
   var u = new Date(ms);
   var jd = Astro.julianDay(u.getUTCFullYear(), u.getUTCMonth() + 1, u.getUTCDate(),
     u.getUTCHours() + u.getUTCMinutes() / 60 + u.getUTCSeconds() / 3600);
-  var ch = Astro.chart(jd, chosenCity.lat, chosenCity.lon,
+  /* With no coordinates the angles are undefined, not merely uncertain. They
+     are computed from 0°/0° and then withheld everywhere — the same shape the
+     unknown-time path already takes, which computes from a noon it does not
+     have and withholds the result. Keeping one shape means one predicate,
+     anglesUnknown(), decides every readout. */
+  var unknownPlace = zoneOnly(chosenCity);
+  var ch = Astro.chart(jd, unknownPlace ? 0 : chosenCity.lat,
+                           unknownPlace ? 0 : chosenCity.lon,
     { houseSystem: $("#cHouse").value });
   ch.meta = {
     dateStr: dv, timeStr: tv, city: chosenCity,
     offset: off, utc: u,
     requested: $("#cHouse").value,
     unknownTime: unknownTime,
+    unknownPlace: unknownPlace,
     shift: unknownTime ? 0 : timeShiftMin,
     warnings: timeWarnings(dv, tv, chosenCity, unknownTime)
   };
@@ -1102,7 +1312,13 @@ function chartToSub(ch){
   var parts = [
     m.dateStr,
     m.unknownTime ? "x" : m.timeStr.replace(":", ""),
-    c.lat.toFixed(2), c.lon.toFixed(2), c.tz,
+    /* "z" in both coordinate slots means the place was given as a bare time
+       zone. It cannot collide with a real coordinate, and a reader that does
+       not know the marker refuses the link rather than charting at 0°/0° —
+       which is what parseFloat would otherwise have handed it. */
+    zoneOnly(c) ? "z" : c.lat.toFixed(2),
+    zoneOnly(c) ? "z" : c.lon.toFixed(2),
+    c.tz,
     ch.houseSystem === m.requested ? m.requested : m.requested,
     /* name,region,country — or name,country as it has always been when there
        is no region. applyChartSub reads it back by counting the commas, so
@@ -1123,24 +1339,33 @@ function applyChartSub(sub){
   if (p.length < 7) return false;
   var date = p[0], time = p[1], lat = parseFloat(p[2]), lon = parseFloat(p[3]);
   var tz = p[4], house = p[5], place = p[6], shift = p[7];
+  /* Both coordinate slots reading "z" is the zone-only marker. Both, not
+     either — a link with one of each is malformed, and charting it as if the
+     missing half were zero is exactly the kind of confident wrong answer this
+     file exists to refuse. */
+  var zoneLink = (p[2] === "z" && p[3] === "z");
   /* A share link is untrusted input. The web lookup already refuses a result
      whose coordinates or zone it cannot stand behind; a link deserves the same
      checks, or "Europe/Lundon" silently moves the Ascendant a whole sign and a
      coordinate of Infinity throws out through the renderer. isFinite rather
      than isNaN — isNaN(Infinity) is false. */
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
-  if (!isFinite(lat) || lat < -90 || lat > 90) return false;
-  if (!isFinite(lon) || lon < -180 || lon > 180) return false;
+  if (!zoneLink){
+    if (!isFinite(lat) || lat < -90 || lat > 90) return false;
+    if (!isFinite(lon) || lon < -180 || lon > 180) return false;
+  }
   if (!validTz(tz)) return false;
 
   /* Three parts is name,region,country; two is the older name,country and must
      keep working, because every link shared before regions existed has that
      shape and coordinates in a link are supposed to outlive the data file. */
   var nameParts = place.split(",");
-  chosenCity = { name:nameParts[0] || "Shared location",
-                 region:nameParts.length > 2 ? nameParts[1] : "",
-                 country:(nameParts.length > 2 ? nameParts[2] : nameParts[1]) || "",
-                 lat:lat, lon:lon, tz:tz };
+  chosenCity = zoneLink
+    ? { name:tz, region:"", country:"", lat:0, lon:0, tz:tz, zoneOnly:true }
+    : { name:nameParts[0] || "Shared location",
+        region:nameParts.length > 2 ? nameParts[1] : "",
+        country:(nameParts.length > 2 ? nameParts[2] : nameParts[1]) || "",
+        lat:lat, lon:lon, tz:tz };
   $("#cDate").value = date;
   var noTime = (time === "x");
   if ($("#cNoTime")) $("#cNoTime").checked = noTime;
@@ -1150,8 +1375,7 @@ function applyChartSub(sub){
   syncTimeField();
   timeShiftMin = shift === "p60" ? 60 : (shift === "m60" ? -60 : 0);
   if (["whole", "placidus", "equal"].indexOf(house) > -1) $("#cHouse").value = house;
-  $("#cPlace").value = placeLabel(chosenCity);
-  showPlaceCoords(lat, lon, tz);
+  showChosenPlace();
 
   var ch = computeChart();
   if (!ch) return false;
@@ -1216,10 +1440,10 @@ function houseOf(ch, lon){
 
 function drawNatal(ch){
   var svg = $("#natal");
-  /* With no birth time the horizon is unknown, so the house ring and the
-     four angles are meaningless. Orient the wheel on 0° Aries instead and
-     draw neither. */
-  var noTime = !!(ch.meta && ch.meta.unknownTime);
+  /* Without a birth time, or without coordinates, the horizon is unknown and
+     the house ring and four angles are meaningless. Orient the wheel on 0°
+     Aries instead and draw neither. */
+  var noTime = anglesUnknown(ch);
   svg.innerHTML =
     '<defs><radialGradient id="ngrad" cx="50%" cy="45%" r="62%">' +
     '<stop offset="0%" stop-color="#161c46" stop-opacity=".8"/>' +
@@ -1668,7 +1892,7 @@ function retroContext(ch, name){
 
 function bodyReadout(ch, name){
   var lon = ch.bodies[name].lon, sp = ch.bodies[name].speed;
-  var noTime = !!(ch.meta && ch.meta.unknownTime);
+  var noTime = anglesUnknown(ch);
   var s = signOf(lon), hn = houseOf(ch, lon), h = HMAP[hn];
   var sp2 = SIGNS_PLAIN[s.id];
   var col = name === "NorthNode" ? "#c4caf0" : (BMAP[BODY_ID[name]] || {}).color || "#fff";
@@ -1688,9 +1912,11 @@ function bodyReadout(ch, name){
       " and " + E(s.modality.toLowerCase()) + " — " + E((sp2 ? sp2.nutshell : s.drive).toLowerCase()) +
       ". " + E(sp2 ? sp2.oneLine : "") + "</p>" +
     (noTime
-      ? "<p><span class=\"lbl\">Where:</span> <span class=\"na\">Needs a birth time.</span> " +
-        "House placement depends on the horizon at the exact moment, which moves a " +
-        "degree every four minutes.</p>"
+      ? "<p><span class=\"lbl\">Where:</span> <span class=\"na\">Needs " +
+        (ch.meta && ch.meta.unknownTime ? "a birth time" : "a birthplace") + ".</span> " +
+        "House placement depends on where the horizon was — which needs both the " +
+        "exact moment, since it moves a degree every four minutes, and the " +
+        "latitude and longitude it was a horizon from.</p>"
       : "<p><span class=\"lbl\">Where:</span> " + linkHouse(hn)[0].toUpperCase() +
         linkHouse(hn).slice(1) + " covers " +
         E(h.covers.slice(0, 3).join(", ").toLowerCase()) + ". " + E(h.oneLine) + "</p>") +
@@ -1716,15 +1942,23 @@ function renderChartOut(ch){
   var sysName = { whole:"Whole Sign", equal:"Equal", placidus:"Placidus" }[ch.houseSystem];
   var fellBack = m.requested === "placidus" && ch.houseSystem !== "placidus";
 
+  /* Two different gaps, and they are not interchangeable. noTime governs what
+     is said about the clock; noAngles governs everything derived from the
+     horizon, which a missing birthplace withholds just as completely. */
   var noTime = !!m.unknownTime;
+  var noAngles = anglesUnknown(ch);
+  var needsForAngles = noTime ? "a birth time" : "a birthplace";
+  var whyNoAngles = noTime
+    ? "Changes every ~2 hours, so it cannot be derived without a birth time."
+    : "Turns on the latitude and longitude you were born at, which a time zone " +
+      "on its own does not fix.";
 
   var html =
     '<div class="bigthree">' +
       b3("Sun sign", sunS, ch.bodies.Sun.lon, "Where the Sun was — the sign most people mean by “my sign”.") +
       b3("Moon sign", moonS, ch.bodies.Moon.lon, "The Moon moves a sign every 2½ days, so this needs the date, not just the month.") +
-      (noTime
-        ? b3Unknown("Rising sign", "Changes every ~2 hours, so it cannot be " +
-            "derived without a birth time.")
+      (noAngles
+        ? b3Unknown("Rising sign", whyNoAngles, needsForAngles)
         : b3("Rising sign", ascS, ch.asc, "The sign coming over the eastern horizon. Changes every ~2 hours — this is why birth time matters.")) +
     "</div>" +
 
@@ -1740,8 +1974,10 @@ function renderChartOut(ch){
       (noTime ? " (time unknown)" : " at " + E(m.timeStr)) + " in " +
       E(placeLabel(m.city)) + " (UTC" + offH + ") · " +
       "that is " + E(m.utc.toISOString().slice(0, 16).replace("T", " ")) + " UTC · " +
-      (noTime ? "no house system — needs a time" : E(sysName) + " houses") +
-      (fellBack && !noTime ? " — <b>Placidus is undefined this far from the equator, so Whole Sign was used instead.</b>" : "") +
+      (noAngles
+        ? "no house system — needs " + (noTime ? "a time" : "a birthplace")
+        : E(sysName) + " houses") +
+      (fellBack && !noAngles ? " — <b>Placidus is undefined this far from the equator, so Whole Sign was used instead.</b>" : "") +
       (m.shift ? " · <b>adjusted " + (m.shift > 0 ? "+" : "−") + "1 hour</b>" : "") +
     "</div>" +
 
@@ -1755,8 +1991,9 @@ function renderChartOut(ch){
       '<div class="card" style="padding:10px">' +
         '<svg id="natal" viewBox="0 0 700 700" role="img" aria-label="Natal chart wheel"></svg>' +
         '<p style="text-align:center;font-size:11.5px;color:var(--faint);margin:2px 0 8px">' +
-          (noTime
-            ? "0° Aries on the left · signs outside · no house ring without a birth time · ℞ marks retrograde"
+          (noAngles
+            ? "0° Aries on the left · signs outside · no house ring without " +
+              (noTime ? "a birth time" : "a birthplace") + " · ℞ marks retrograde"
             : "Ascendant on the left · signs outside · houses numbered inside · ℞ marks retrograde") + "</p>" +
       "</div>" +
       "<div>" +
@@ -1787,10 +2024,10 @@ function renderChartOut(ch){
       "<b>" + E(PLANET_GLYPH.Sun + " Sun") + "</b> (identity) " +
       "in <b>" + linkSign(sunS) + "</b> (" + E((SIGNS_PLAIN[sunS.id] || {}).nutshell || "").toLowerCase() +
       ")" +
-      (noTime
+      (noAngles
         ? " in <b class=\"na\">house unknown</b>. The third part of every sentence " +
-          "needs a birth time — without one you have the planet and the sign, which is " +
-          "two thirds of the grammar."
+          "needs " + (noTime ? "a birth time" : "a birthplace") + " — without one you " +
+          "have the planet and the sign, which is two thirds of the grammar."
         : " in <b>" + linkHouse(houseOf(ch, ch.bodies.Sun.lon)) + "</b> (" +
           E(HMAP[houseOf(ch, ch.bodies.Sun.lon)].title.toLowerCase()) + ").") +
       " Then the same for the Moon, then for each planet. Nothing more complicated is happening — " +
@@ -1865,10 +2102,10 @@ function b3(k, s, lon, d){
 }
 
 /* Same slot, but visibly withheld rather than filled with a guess. */
-function b3Unknown(k, d){
+function b3Unknown(k, d, needs){
   return '<div class="b3 unknown" style="--c:rgba(255,255,255,.04);--c2:var(--faint)">' +
     '<div class="k">' + E(k) + "</div>" +
-    '<div class="v"><span class="g">—</span>Needs a birth time</div>' +
+    '<div class="v"><span class="g">—</span>Needs ' + E(needs || "a birth time") + "</div>" +
     '<div class="d">' + E(d) + "</div></div>";
 }
 
@@ -1913,7 +2150,7 @@ function linkBody(name){
 function renderChartList(ch){
   $("#chartList").innerHTML = bodiesIn(ch).map(function(n){
     var lon = ch.bodies[n].lon, s = signOf(lon), hn = houseOf(ch, lon);
-    var noTime = !!(ch.meta && ch.meta.unknownTime);
+    var noTime = anglesUnknown(ch);
     var col = n === "NorthNode" ? "#c4caf0" : (BMAP[BODY_ID[n]] || {}).color || "#fff";
     var b = BMAP[BODY_ID[n]];
     return '<button class="prow" data-cb="' + n + '" style="--c:' + col + '">' +
@@ -1948,6 +2185,7 @@ function renderChartPage(){
   renderPresets();
   zodiacMode = load("zodiacMode", "tropical") === "sidereal" ? "sidereal" : "tropical";
   var hadSaved = restoreChartInputs();
+  wireZone();
   wireForget();
 
   $("#cNoTime").addEventListener("change", function(){

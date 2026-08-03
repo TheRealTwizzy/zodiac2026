@@ -84,9 +84,15 @@ data    2,074 KB   loaded only when the Chart section is opened
 ```
 
 Previously 504 KB in one file, all parsed upfront. Now each part caches
-separately and the service worker precaches the lot for offline use. The place
-table is the one large asset, and it is lazy — nobody who does not open the
-Chart section ever downloads it.
+separately and the service worker precaches the shell for offline use. The
+place table is the one large asset and is the deliberate exception: it is not
+precached and loads only when the Chart section is opened, so nobody who never
+opens Chart downloads it. It joins the cache the first time Chart asks for it.
+
+Indexing that table for search is done in slices while the page is idle rather
+than inside the first keystroke, and a birth chart can be calculated from a
+time zone alone — with the Ascendant, the Midheaven and the houses withheld,
+since those need a latitude.
 
 ---
 

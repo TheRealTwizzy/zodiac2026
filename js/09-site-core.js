@@ -712,6 +712,14 @@ var LIMITS = [
     d:"The Ascendant moves a degree every four minutes and the houses move with it. " +
       "Without a time they are withheld entirely rather than computed from a guessed " +
       "noon, because a plausible-looking wrong answer is worse than none." },
+  { t:"A time zone instead of a birthplace",
+    d:"Every planet here is geocentric, so its position follows from the instant " +
+      "alone — a time zone fixes all of them exactly, and naming a town changes " +
+      "nothing about them. The Ascendant, the Midheaven and the houses are the " +
+      "opposite: they are functions of latitude and longitude, and a zone can span " +
+      "enough of the globe to move the Ascendant two whole signs from one end to " +
+      "the other. So the chart form takes a zone if you would rather give one, and " +
+      "withholds the angles and houses rather than picking a city on your behalf." },
   { t:"What is kept on this device",
     d:"Calculating a chart saves the date, the time and the birthplace in this " +
       "browser, so the form is still filled in next time. It stays on this device " +
