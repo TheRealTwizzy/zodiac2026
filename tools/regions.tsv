@@ -1,0 +1,21 @@
+# GeoNames names a division as its own gazetteer does. Where an English
+# reader would expect something else, say so here explicitly.
+# Columns: <country>.<adminCode>\t<name to display>
+
+IT.07	Lazio
+EG.11	Cairo Governorate
+IQ.10	Baghdad
+RU.48	Moscow
+UA.30	Kyiv
+JP.40	Tokyo
+IN.07	Delhi
+CO.34	Bogota D.C.
+VE.25	Capital District
+AR.07	Buenos Aires
+ET.44	Addis Ababa
+DZ.01	Algiers
+UZ.13	Tashkent
+SA.10	Riyadh
+CU.11	Havana
+RU.66	Saint Petersburg
+GB.ENG	England

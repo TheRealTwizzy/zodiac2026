@@ -536,6 +536,45 @@ setTimeout(() => {
 
     // The whole reason for the region field: eight Springfields, and no way to
     // tell them apart before this.
+    // Regions are looked up in GeoNames' own admin1 table, never inferred. The
+    // inference this replaced put 45 Jiangsu cities, Nanjing included, in
+    // "Taiwan Province, People's Republic of China".
+    check("regions name the division the place is actually in", () => {
+      const region = (name, country) => px(
+        `(function(){var c = CITIES.find(function(x){ return x[0] === ${JSON.stringify(name)} && ` +
+        `CTRY[x[1]] === ${JSON.stringify(country)}; }); return c ? (ADM[c[5]] || "") : "MISSING";})()`);
+      const want = [["Nanjing", "China", "Jiangsu"], ["Tianjin", "China", "Tianjin"],
+                    ["Belfast", "United Kingdom", "Northern Ireland"],
+                    ["Caracas", "Venezuela", "Capital District"],
+                    ["Springfield", "United States", "Missouri"]];
+      for (const [n, c, r] of want){
+        const got = region(n, c);
+        if (got !== r) throw new Error(n + " -> " + got + ", expected " + r);
+      }
+      return true;
+    });
+    check("no region names a country instead of a division", () => {
+      const bad = px(`ADM.filter(function(a){ return /Province, People|Republic of China/.test(a); }).join(", ")`);
+      if (bad) throw new Error(bad);
+      return true;
+    });
+    check("country names read the way a person writes them", () => {
+      const bad = px(`CTRY.filter(function(c){ return /\\b(And|Of)\\b/.test(c) || / The$/.test(c) ||` +
+        ` c === "Korea South" || c === "Korea North"; }).join(", ")`);
+      if (bad) throw new Error(bad);
+      return true;
+    });
+    check("abbreviations find the place people mean", () => {
+      const first = (q) => { const r = window.searchCities(q); return r.length ? window.cityLabel(r[0]) : "NO RESULT"; };
+      const want = [["st petersburg", /Russia$/], ["st louis", /^St\. Louis, Missouri/],
+                    ["saint louis", /^St\. Louis, Missouri/], ["mt vernon", /^Mount Vernon/],
+                    ["ft worth", /^Fort Worth/]];
+      for (const [q, re] of want){
+        const got = first(q);
+        if (!re.test(got)) throw new Error(q + " -> " + got);
+      }
+      return true;
+    });
     check("duplicate names are separated by region", () => {
       const sf = names("springfield").filter(s => /^Springfield\|/.test(s) && /United States$/.test(s));
       if (sf.length < 4) throw new Error("only " + sf.length + " US Springfields");
