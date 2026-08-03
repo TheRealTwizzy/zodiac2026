@@ -307,11 +307,20 @@
           </label>
         </div>
         <div class="field" style="flex:2 1 260px">
-          <label for="cPlace">Place</label>
+          <!-- for= is re-pointed by syncPlaceMode(): whichever of the two
+               controls is live is the one this labels. -->
+          <label for="cPlace" id="cPlaceLabel">Place</label>
           <input type="text" id="cPlace" placeholder="Start typing a city…" role="combobox"
                  aria-expanded="false" aria-controls="cPlaceList" aria-autocomplete="list">
           <div class="ac-list" id="cPlaceList" role="listbox"></div>
+          <!-- Filled by buildZoneSelect() the first time it is needed; there are
+               ~420 zones and nobody who names a city ever pays for them. -->
+          <select id="cZone" aria-label="Time zone of birth" hidden disabled></select>
           <div class="hint" id="cPlaceHint" role="status" aria-live="polite">Time zone and daylight saving are handled automatically</div>
+          <label class="checkline" for="cNoPlace">
+            <input type="checkbox" id="cNoPlace">
+            <span>Give a time zone instead of a place</span>
+          </label>
         </div>
       </div>
       <div class="frow">

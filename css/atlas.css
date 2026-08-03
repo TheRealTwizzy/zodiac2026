@@ -1373,6 +1373,10 @@ svg#adial:active{cursor:grabbing}
   display:block;font-size:10.2px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--faint);font-weight:700;margin-bottom:6px;
 }
+/* The place box and the time-zone select swap places, and nothing else in this
+   file sets display on a form control — so the UA rule would already win. Say
+   it out loud anyway: the swap is load-bearing, not decorative. */
+[hidden]{display:none !important}
 .field input,.field select{
   width:100%;font:inherit;font-size:14px;padding:10px 12px;border-radius:10px;
   background:rgba(255,255,255,.05);border:1px solid var(--stroke);color:var(--text);

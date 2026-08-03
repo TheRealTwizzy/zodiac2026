@@ -1053,6 +1053,192 @@ setTimeout(() => {
       return true;
     });
 
+    section("a time zone instead of a place");
+    // The planets are geocentric, so a zone fixes every one of them. The
+    // Ascendant, the Midheaven and the houses are functions of latitude and
+    // longitude and a zone does not pin those down — 68 of the 340 multi-place
+    // zones in the table put the Ascendant in a different sign depending which
+    // end of the zone you were born at. So: same bargain as an unknown birth
+    // time. Give less, and what cannot be derived is withheld, not guessed.
+    {
+      const zoneMode = (on) => {
+        document.getElementById("cNoPlace").checked = on;
+        window.syncPlaceMode();
+      };
+      check("ticking the box swaps the place box for a zone list", () => {
+        zoneMode(true);
+        const inp = document.getElementById("cPlace"), sel = document.getElementById("cZone");
+        if (!inp.hidden || !inp.disabled) throw new Error("place box still live");
+        if (sel.hidden || sel.disabled) throw new Error("zone select not shown");
+        if (sel.options.length < 100) throw new Error("only " + sel.options.length + " zones");
+        if (!window.chosenCity || !window.chosenCity.zoneOnly)
+          throw new Error("no zone-only place: " + JSON.stringify(window.chosenCity));
+        return true;
+      });
+      check("the visible label follows the visible control", () => {
+        zoneMode(true);
+        const lab = document.getElementById("cPlaceLabel");
+        if (lab.getAttribute("for") !== "cZone")
+          throw new Error("labels the hidden input: for=" + lab.getAttribute("for"));
+        if (!/Time zone/.test(lab.textContent)) throw new Error("says " + lab.textContent);
+        zoneMode(false);
+        if (lab.getAttribute("for") !== "cPlace") throw new Error("did not switch back");
+        if (!/Place/.test(lab.textContent)) throw new Error("says " + lab.textContent);
+        return true;
+      });
+      check("every zone offered is one Intl accepts", () => {
+        const bad = px(`(function(){
+          var sel = document.getElementById("cZone"), out = [];
+          for (var i = 0; i < sel.options.length; i++)
+            if (!validTz(sel.options[i].value)) out.push(sel.options[i].value);
+          return out.slice(0, 5).join(", ");
+        })()`);
+        if (bad) throw new Error(bad);
+        return true;
+      });
+      // The whole justification for the feature, checked rather than asserted.
+      check("the planets are identical to a real city in the same zone", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "Europe/Oslo"; setZonePlace();`);
+        setForm("1990-06-15", "12:00", false);
+        const zone = window.computeChart();
+        const zb = {}; for (const n of window.bodiesIn(zone)) zb[n] = zone.bodies[n].lon;
+        window.chosenCity = { name:"Oslo", country:"Norway", lat:59.91, lon:10.75,
+                              tz:"Europe/Oslo" };
+        const city = window.computeChart();
+        let worst = 0, which = "";
+        for (const n of window.bodiesIn(city)){
+          const d = Math.abs(zb[n] - city.bodies[n].lon);
+          if (d > worst){ worst = d; which = n; }
+        }
+        if (Object.keys(zb).length < 10) throw new Error("only " + Object.keys(zb).length + " bodies");
+        if (worst !== 0) throw new Error(which + " differs by " + worst);
+        // ...and the Ascendant, which is why it is withheld, does NOT agree.
+        const gap = Math.abs(zone.asc - city.asc);
+        console.log("        (" + Object.keys(zb).length + " bodies identical; the Ascendant " +
+          "would have been " + gap.toFixed(1) + "° out)");
+        if (gap < 1) throw new Error("the Ascendant agreed too — check the fixture");
+        return true;
+      });
+      check("the angles and houses are withheld, and say why", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "Europe/Oslo"; setZonePlace();`);
+        setForm("1990-06-15", "12:00", false);
+        window.renderChartOut(window.computeChart());
+        if (!document.querySelector(".b3.unknown")) throw new Error("rising sign not flagged");
+        if (document.querySelectorAll("#natal .nhouse").length) throw new Error("houses drawn");
+        if (document.querySelectorAll("#natal .nang").length) throw new Error("angles drawn");
+        const ph = document.querySelector(".plist .ph");
+        if (!ph || ph.textContent.trim() !== "—") throw new Error("list shows " + ph?.textContent);
+        const t = document.getElementById("chartOut").textContent;
+        // The reason has to name the missing half — a birthplace, not a time.
+        if (!/Needs a birthplace/.test(t)) throw new Error("blames the wrong gap");
+        if (/Needs a birth time/.test(t)) throw new Error("says a time is missing when one was given");
+        if (!/no house system — needs a birthplace/.test(t)) throw new Error("house line: wrong reason");
+        return true;
+      });
+      // Substituting a representative city for the zone would be invisible on
+      // its own — the angles are withheld on the flag, downstream of any
+      // coordinate. What must never happen is the page REPORTING a latitude it
+      // was not given, which is the step that would make the substitution look
+      // like an answer.
+      check("no coordinate is ever shown for a zone-only place", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "Europe/Oslo"; setZonePlace();`);
+        const hint = document.getElementById("cPlaceHint").textContent;
+        if (/\d+(\.\d+)?\s*°\s*[NSEW]/.test(hint)) throw new Error("hint shows coordinates: " + hint);
+        if (!/Europe\/Oslo/.test(hint)) throw new Error("hint does not name the zone: " + hint);
+        setForm("1990-06-15", "12:00", false);
+        window.renderChartOut(window.computeChart());
+        const t = document.getElementById("chartOut").textContent;
+        if (/\d+(\.\d+)?\s*°\s*[NS],/.test(t)) throw new Error("readout shows a latitude");
+        if (!/in the Europe\/Oslo time zone/.test(t))
+          throw new Error("readout does not name the zone as the place");
+        if (window.placeLabel(window.chosenCity) !== "the Europe/Oslo time zone")
+          throw new Error("placeLabel: " + window.placeLabel(window.chosenCity));
+        return true;
+      });
+      check("an unknown time still blames the time, not the place", () => {
+        zoneMode(false);
+        window._pickCityIdx(window.searchCities("london")[0]);
+        setForm("1984-03-09", "07:45", true);
+        window.renderChartOut(window.computeChart());
+        const t = document.getElementById("chartOut").textContent;
+        if (!/Needs a birth time/.test(t)) throw new Error("lost the time wording");
+        if (/Needs a birthplace/.test(t)) throw new Error("blames the place");
+        return true;
+      });
+      check("nothing else is withheld — the ordinary notices still appear", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "Europe/Oslo"; setZonePlace();`);
+        setForm("2101-01-01", "12:00", false);   // outside Pluto's fit window
+        window.renderChartOut(window.computeChart());
+        const t = document.getElementById("chartOut").textContent;
+        if (!/Pluto is not shown for this date/.test(t)) throw new Error("lost the Pluto notice");
+        if (!/A time zone rather than a birthplace/.test(t)) throw new Error("lost the zone notice");
+        return true;
+      });
+      check("a zone-only chart shares and comes back as one", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "Asia/Tokyo"; setZonePlace();`);
+        setForm("1990-06-15", "12:00", false);
+        const sub = window.chartToSub(window.computeChart());
+        if (!/\|z\|z\|/.test(sub)) throw new Error("no zone marker: " + sub);
+        window.chosenCity = null;
+        if (!window.applyChartSub(sub)) throw new Error("refused its own link");
+        const c = window.chosenCity;
+        if (!c.zoneOnly) throw new Error("came back as a place: " + JSON.stringify(c));
+        if (c.tz !== "Asia/Tokyo") throw new Error("zone " + c.tz);
+        if (!document.getElementById("cNoPlace").checked) throw new Error("box not ticked");
+        if (document.getElementById("cZone").value !== "Asia/Tokyo")
+          throw new Error("select shows " + document.getElementById("cZone").value);
+        if (!window.lastChart.meta.unknownPlace) throw new Error("flag lost");
+        return true;
+      });
+      // Half a marker is malformed. Charting it as if the missing half were
+      // zero is exactly the confident wrong answer this file refuses.
+      check("a link with only one coordinate replaced is refused", () => {
+        for (const sub of ["1990-06-15|1200|z|139.69|Asia/Tokyo|whole|Tokyo",
+                           "1990-06-15|1200|35.69|z|Asia/Tokyo|whole|Tokyo"])
+          if (window.applyChartSub(sub) !== false) throw new Error("accepted " + sub);
+        return true;
+      });
+      check("a zone-only chart survives a save and restore", () => {
+        zoneMode(true);
+        px(`document.getElementById("cZone").value = "America/Denver"; setZonePlace();`);
+        setForm("1990-06-15", "12:00", false);
+        window.renderChartOut(window.computeChart());
+        window.saveChartInputs();
+        window.chosenCity = null;
+        document.getElementById("cNoPlace").checked = false;
+        if (!window.restoreChartInputs()) throw new Error("restore refused");
+        if (!window.chosenCity.zoneOnly) throw new Error("came back as a place");
+        if (window.chosenCity.tz !== "America/Denver") throw new Error(window.chosenCity.tz);
+        if (!document.getElementById("cNoPlace").checked) throw new Error("box not re-ticked");
+        return true;
+      });
+      check("changing your mind gives the town back", () => {
+        zoneMode(false);
+        window._pickCityIdx(window.searchCities("springfield il")[0]);
+        const town = window.chosenCity;
+        zoneMode(true);
+        if (!window.chosenCity.zoneOnly) throw new Error("did not switch");
+        zoneMode(false);
+        if (!window.chosenCity || window.chosenCity.zoneOnly)
+          throw new Error("did not switch back: " + JSON.stringify(window.chosenCity));
+        if (window.chosenCity.name !== town.name)
+          throw new Error("restored " + window.chosenCity.name + ", not " + town.name);
+        if (!/Springfield/.test(document.getElementById("cPlace").value))
+          throw new Error("box reads " + document.getElementById("cPlace").value);
+        return true;
+      });
+      // Leave the form as the rest of the suite expects it.
+      zoneMode(false);
+      window.localStorage.removeItem("cosmicatlas:chartInputs");
+      window._pickCityIdx(window.searchCities("london")[0]);
+      setForm("1990-06-15", "12:00", false);
+    }
+
     section("time warnings");
     check("DST fall-back reads as ambiguous", () =>
       window.dstAnomaly(2023, 10, 29, 1, 30, "Europe/London").kind === "ambiguous");
