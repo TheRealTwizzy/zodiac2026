@@ -54,7 +54,17 @@ var CITIES_SRC = "data/cities.js";
 var CITIES_WANT = 2;          /* the schema version this file knows how to read */
 var citiesPromise = null;
 
-function citiesLoaded(){ return typeof CITIES !== "undefined"; }
+/* Deliberately more than "is CITIES there?". A rejected load still leaves the
+   old globals defined, because the script did execute — so if this only tested
+   for CITIES, a retry would resolve straight away and ordinary typing would
+   walk an incompatible table looking for fields that are not in it. The schema
+   check has to live in the predicate everything else asks, not only on the
+   load path. */
+function citiesLoaded(){
+  return typeof CITIES !== "undefined" &&
+         typeof CITIES_FORMAT !== "undefined" &&
+         CITIES_FORMAT === CITIES_WANT;
+}
 
 function ensureCities(){
   if (citiesPromise) return citiesPromise;
@@ -63,15 +73,19 @@ function ensureCities(){
     var s = document.createElement("script");
     s.src = CITIES_SRC;
     s.async = true;
+    /* The service worker serves cache-first and revalidates each file on its
+       own schedule, so a returning visitor can briefly pair this script with a
+       cities.js from an earlier deploy. Reading moved fields out of an old
+       record would produce a chart that is quietly wrong rather than one that
+       fails — much the worse outcome — so refuse the file instead. */
     s.onload = function(){
-      if (!citiesLoaded()) return reject(new Error("cities.js loaded but defined no CITIES"));
-      /* The service worker serves cache-first and revalidates each file on its
-         own schedule, so a returning visitor can briefly pair this script with
-         a cities.js from an earlier deploy. Reading moved fields out of an old
-         record would produce a chart that is quietly wrong rather than one that
-         fails — much the worse outcome — so refuse the file instead. */
-      if (typeof CITIES_FORMAT === "undefined" || CITIES_FORMAT !== CITIES_WANT){
-        return reject(new Error("cities.js is a different format"));
+      if (typeof CITIES === "undefined"){
+        return reject(new Error("cities.js loaded but defined no CITIES"));
+      }
+      if (!citiesLoaded()){
+        return reject(new Error("cities.js is schema " +
+          (typeof CITIES_FORMAT === "undefined" ? "unversioned" : CITIES_FORMAT) +
+          ", this build reads " + CITIES_WANT));
       }
       resolve();
     };
@@ -109,6 +123,8 @@ function fold(s){
     .replace(/[þÞ]/g, "th")   /* þ Þ */
     .replace(/[ðÐ]/g, "d")    /* ð Ð */
     .replace(/ß/g, "ss")           /* ß */
+    .replace(/[\u0126\u0127]/g, "h")   /* Maltese H-bar */
+    .replace(/[\u018f\u0259]/g, "e")   /* Azerbaijani schwa */
     /* Typographic apostrophes to the one on the keyboard, so N'Djamena and
        Ra's Bayrut are reachable by someone typing them the ordinary way. */
     .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")
@@ -134,6 +150,12 @@ function fold(s){
    time.                                                                      */
 var CNAME = null, CTEXT = null, CBUCKET = null, CFOLD = null, AFOLD = null;
 
+/* Word separators, listed rather than derived, so that letters in every script
+   survive. Written as an explicit class rather than \p{L} so the file still
+   parses on an engine without Unicode property escapes — a syntax error in a
+   classic script takes down everything after it. */
+var WORD_SPLIT = /[\s'".,;:()\[\]{}\/\\|_+*&#!?@~^$%=<>`\u2018\u2019\u201c\u201d-]+/g;
+
 function buildCityIndex(){
   if (CBUCKET) return;
   var n = CITIES.length;
@@ -146,7 +168,12 @@ function buildCityIndex(){
     var alias = c[6] || c[0].toLowerCase();
     CNAME[i] = "|" + alias;
 
-    var text = " " + alias.replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    /* Split on the punctuation that actually separates words in a place name,
+       rather than keeping only [a-z0-9]. Whitelisting ASCII silently emptied
+       the index for every name written in a non-Latin script and carrying no
+       Latin alias — Зуунмод, Бережани and six Macedonian towns shipped in the
+       table but could not be selected in any script, including their own. */
+    var text = " " + alias.replace(WORD_SPLIT, " ").trim() + " ";
     CTEXT[i] = text;
 
     var seen = "";
@@ -294,9 +321,19 @@ function wirePlace(){
   function runSearch(){
     var q = inp.value.trim();
     lastQuery = q;
-    rows = withWebOffer(searchCities(q), q);
+    var found = searchCities(q);
+    rows = withWebOffer(found, q);
     hi = 0;
     draw();
+    /* "Never" is meant to be reversible, and saying so in the README is not
+       enough — the way back has to be somewhere a person can find it. Offer it
+       at exactly the moment it would be useful: a search that came up short. */
+    if (found.length < 3 && q.length >= 3 && webConsent() === "never") offerReset();
+  }
+
+  function offerReset(){
+    setPlaceStatus('Web place search is off. ' +
+      '<button type="button" class="chip ghost" data-web="reset">Turn it back on</button>');
   }
 
   /* Even bucketed, a query plus a full dropdown rebuild is more than a phone
@@ -378,38 +415,45 @@ function wirePlace(){
 
   /* Asked once, in the hint line rather than a dialog, so it doesn't snatch
      focus in the middle of typing. */
+  var pendingQuery = "";
+
   function askConsent(q){
-    var hint = $("#cPlaceHint");
-    if (!hint) return;
-    hint.innerHTML =
+    pendingQuery = q;
+    setPlaceStatus(
       '<span class="consent">Search the web for this place? Only the text you typed ' +
       'is sent, to open-meteo.com — no cookies, no account, nothing about your chart. ' +
       '<button type="button" class="chip ghost" data-web="once">Search once</button> ' +
       '<button type="button" class="chip ghost" data-web="always">Always</button> ' +
-      '<button type="button" class="chip ghost" data-web="never">Never</button></span>';
+      '<button type="button" class="chip ghost" data-web="never">Never</button></span>');
     announce("Web place search needs your permission.");
-
-    hint.querySelectorAll("[data-web]").forEach(function(b){
-      b.addEventListener("click", function(){
-        var choice = b.dataset.web;
-        if (choice === "never"){
-          setWebConsent("never");
-          setPlaceStatus("Web place search is off. " +
-            '<button type="button" class="chip ghost" data-web="reset">Turn it back on</button>');
-          $("#cPlaceHint").querySelector("[data-web]").addEventListener("click", function(){
-            setWebConsent("");
-            setPlaceStatus(PLACE_HINT);
-            inp.focus();
-          });
-          rows = rows.filter(function(r){ return r.kind !== "ask"; });
-          draw();
-          return;
-        }
-        if (choice === "always") setWebConsent("always");
-        doWeb(q);
-      });
-    });
   }
+
+  /* One delegated handler rather than listeners attached per render: the hint
+     line is rewritten constantly — by the consent prompt, by the coordinate
+     readout, by every status message — and re-binding on each rewrite is how
+     controls end up dead or double-firing. */
+  var hintEl = $("#cPlaceHint");
+  if (hintEl) hintEl.addEventListener("click", function(e){
+    var b = e.target.closest("[data-web]");
+    if (!b) return;
+    var choice = b.dataset.web;
+    if (choice === "reset"){
+      setWebConsent("");
+      setPlaceStatus(PLACE_HINT);
+      inp.focus();
+      runSearch();
+      return;
+    }
+    if (choice === "never"){
+      setWebConsent("never");
+      offerReset();
+      rows = rows.filter(function(r){ return r.kind !== "ask"; });
+      draw();
+      return;
+    }
+    if (choice === "always") setWebConsent("always");
+    doWeb(pendingQuery);
+  });
 
   function doWeb(q){
     webBusy = true;

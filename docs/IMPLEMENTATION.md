@@ -2,7 +2,7 @@
 
 Everything in `cosmic-atlas-qol-master.md`, plus the mobile-app work and the
 file split, plus the place-data work in batch five. Run `npm test` to verify —
-**183 checks**.
+**189 checks**.
 
 ---
 
@@ -133,6 +133,21 @@ Chart section ever downloads it.
     GeoNames codes, which do separate the four UK countries.
 11. The autocomplete's highlighted row was `color:#fff` on a pale lilac
     background, which the light theme made very nearly invisible.
+12. The schema check sat only on the load path. A rejected load still leaves
+    the globals defined — the script did execute — so a retry resolved straight
+    away and ordinary typing walked the incompatible table anyway. The check
+    now lives in `citiesLoaded()`, the predicate everything else asks.
+13. The search index tokenized on `[a-z0-9]`, which emptied the entry for every
+    name written in a non-Latin script with no Latin alias. Thirteen places —
+    Зуунмод, Бережани, six Macedonian towns, four Maltese, one Azerbaijani —
+    shipped in the table and could not be selected in any script, their own
+    included. Now split on separators, so letters in every script survive; Ħ
+    and Ə joined the fold so those names also work from an ASCII keyboard.
+14. Choosing **Never** for the web lookup rendered the way back only at that
+    moment, so after a reload the setting was permanent in practice — while the
+    README promised it could be turned back on. It now reappears whenever a
+    search comes up short, and the hint line uses one delegated handler rather
+    than listeners re-bound on every rewrite.
 
 ## Testing
 
@@ -141,7 +156,7 @@ npm test
 JSDOM_PATH=/path/to/node_modules/jsdom node smoke.js
 ```
 
-183 checks across 30 sections. Where a claim can be verified independently it
+189 checks across 30 sections. Where a claim can be verified independently it
 is: aspect patterns are re-checked against raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
 against the documented April 2024 Mercury retrograde, the ayanamsa against the
