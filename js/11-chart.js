@@ -155,7 +155,16 @@ function fold(s){
     .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")
     /* Turkish dotless i, so Bagcilar is reachable from an ASCII keyboard. */
     .replace(/\u0131/g, "i")
-    .toLowerCase();
+    .toLowerCase()
+    /* Abbreviations people actually type. 306 places begin "Saint" and 27
+       begin "St."; without this neither form finds the other, and
+       "st petersburg" answers with Florida rather than Russia. */
+    .replace(/\bst\.?\s+/g, "saint ")
+    .replace(/\bste\.?\s+/g, "sainte ")
+    .replace(/\bsankt\s+/g, "saint ")
+    .replace(/\bmt\.?\s+/g, "mount ")
+    .replace(/\bft\.?\s+/g, "fort ")
+    ;
 }
 
 /* Fifty thousand rows is too many to lowercase on every keystroke, so the work

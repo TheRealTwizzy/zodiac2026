@@ -6,10 +6,9 @@
   "scripts": {
     "build": "node build-cities.js"
   },
-  "comment": "Pinned exactly: data/cities.js has to regenerate byte-identically. All three are permissive — MIT, MIT and CC0. country-state-city carries the same subdivision data but is GPL-3.0, so it is deliberately not used here.",
+  "comment": "Pinned exactly: data/cities.js has to regenerate byte-identically. Both are permissive (MIT, CC0). The admin1, country and region tables are vendored as TSV in this directory rather than pulled from a package, so a regeneration needs no network and the region on a record is a lookup rather than a guess.",
   "dependencies": {
     "all-the-cities": "3.1.0",
-    "countries-states-cities": "1.0.6",
     "tz-lookup": "6.1.25"
   },
   "license": "MIT"

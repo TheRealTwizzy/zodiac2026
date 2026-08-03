@@ -11,7 +11,7 @@
    The version bump matters — this worker serves cache-first and revalidates
    each file on its own schedule, so without it a returning visitor could pair
    a new js/11-chart.js with a cached cities.js from the old schema. */
-const CACHE = "cosmic-atlas-v2";
+const CACHE = "cosmic-atlas-v3";
 
 const PRECACHE = [
   "./",

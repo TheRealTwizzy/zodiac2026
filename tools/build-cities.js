@@ -11,29 +11,35 @@
  *                             country and coordinates — 135k down to pop 1000.
  *   tz-lookup                 CC0.  Coordinates -> IANA zone, from the tz
  *                             boundary shapes.
- *   countries-states-cities   MIT.  ISO 3166-2 subdivision names, plus cities
- *                             carrying a subdivision code and coordinates.
+ *   tools/geonames-admin1.tsv  GeoNames' own admin1 table, CC BY 4.0, vendored.
+ *   tools/countries.tsv        ISO 3166 country names, readable forms.
  *   tools/exonyms.tsv         hand-written. English names GeoNames doesn't
  *                             carry (Munich for München, and so on).
  *
  * The underlying place data is GeoNames, CC BY 4.0 — attributed in the header
  * this script writes and in the README.
  *
- * On regions: GeoNames codes its first-order divisions with FIPS for a lot of
- * countries, while every published subdivision list is keyed by ISO. Matching
- * the two by code resolves barely a third of the rows. So instead each place
- * is matched against the ISO-coded city list — by name first, then by nearest
- * neighbour — which resolves nearly all of them. See resolveRegion().
+ * On regions: they are LOOKED UP, never inferred. Every place carries a
+ * GeoNames adminCode, and tools/geonames-admin1.tsv is GeoNames' own table of
+ * what those codes mean, so the division a place belongs to is a fact read out
+ * of a file. An earlier version guessed instead — name-match, then nearest
+ * neighbour within 60 km, then a majority vote — and guessed wrong often
+ * enough to label 45 Jiangsu cities including Nanjing "Taiwan Province,
+ * People's Republic of China", Tianjin as Hebei, and Bogota as Cundinamarca.
  *
- * Deliberately NOT used: country-state-city, which carries the same data but
- * is GPL-3.0 and would be a licence problem in an MIT repository.
+ * The authoritative name is not always the readable one — GeoNames says
+ * "Latium" for Lazio and "Jiangsu Sheng" for Jiangsu. Display names therefore
+ * come from a small, explicit layer on top (regions.tsv plus two mechanical
+ * rules), so readability is a reviewable decision rather than a side effect.
+ *
+ * Deliberately NOT used: country-state-city, which is GPL-3.0 and would be a
+ * licence problem in an MIT repository.
  */
 
 const fs = require("fs");
 const path = require("path");
 const allCities = require("all-the-cities");
 const tzLookup = require("tz-lookup");
-const csc = require("countries-states-cities").default;
 
 /* The one knob. 5000 gives ~49k places, 15000 ~26k, 1000 all 135k. Capitals
    and first-order admin seats come in regardless, so that a small regional
@@ -48,29 +54,11 @@ const ALWAYS = new Set(["PPLC", "PPLA"]);
    2,456 real places including Navi Mumbai at 2.6 million. */
 const WEAK = new Set(["PPLH", "PPLQ", "PPLW", "PPLCH"]);
 
-/* How far a place may sit from the nearest ISO-coded city before we give up
-   and leave its region blank. Wide enough for sparse countries, tight enough
-   not to reach across a border. */
-const MATCH_KM = 60;
-
-/* Per-place matching decides each row on its own, so two towns in the same
-   county can come out labelled differently when one of them sits nearer the
-   border. Voting fixes that: every place sharing a GeoNames admin code gets
-   the name most of them agreed on, as long as the agreement is clear. Below
-   this share the group keeps its per-place answers, which is the best we have. */
-const VOTE_SHARE = 0.6;
-
-/* Upstream data errors, keyed by GeoNames admin code. countries-states-cities
-   files all 120 Northern Irish towns — Belfast, Derry, Antrim — under the
-   subdivision code for North Yorkshire, and does it consistently, so no amount
-   of cross-checking inside the data can catch it. Verified by hand against the
-   GeoNames codes, which do distinguish the four UK countries correctly. */
-const OVERRIDE = new Map([
-  ["GB/NIR", "Northern Ireland"]
-]);
-
 const OUT = path.join(__dirname, "..", "data", "cities.js");
 const EXONYMS = path.join(__dirname, "exonyms.tsv");
+const ADMIN1  = path.join(__dirname, "geonames-admin1.tsv");
+const REGIONS = path.join(__dirname, "regions.tsv");
+const COUNTRIES = path.join(__dirname, "countries.tsv");
 
 /* ------------------------------------------------------------- helpers --- */
 
@@ -94,7 +82,16 @@ function fold(s){
     .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")
     /* Turkish dotless i, so Bagcilar is reachable from an ASCII keyboard. */
     .replace(/\u0131/g, "i")
-    .toLowerCase();
+    .toLowerCase()
+    /* Abbreviations people actually type. 306 places begin "Saint" and 27
+       begin "St."; without this neither form finds the other, and
+       "st petersburg" answers with Florida rather than Russia. */
+    .replace(/\bst\.?\s+/g, "saint ")
+    .replace(/\bste\.?\s+/g, "sainte ")
+    .replace(/\bsankt\s+/g, "saint ")
+    .replace(/\bmt\.?\s+/g, "mount ")
+    .replace(/\bft\.?\s+/g, "fort ")
+    ;
 }
 
 /* Equirectangular approximation. Plenty at these distances and much cheaper
@@ -138,73 +135,39 @@ function readExonyms(){
   return map;
 }
 
-/* Per country: every ISO-coded city bucketed into half-degree cells for
-   nearest-neighbour lookup, plus a folded-name map for the exact-match path. */
-function buildRegionIndex(){
-  const stateName = new Map();         /* "DE/BW" -> "Baden-Württemberg" */
-  const byCountry = new Map();         /* "DE" -> { cells, names } */
-
-  for (const country of csc.getAllCountries()){
-    const iso2 = country.iso2;
-    for (const state of csc.getStatesOfCountry(country.id)){
-      stateName.set(iso2 + "/" + state.state_code, state.name);
-
-      for (const city of csc.getCitiesOfState(state.id)){
-        const lat = parseFloat(city.latitude), lon = parseFloat(city.longitude);
-        if (!isFinite(lat) || !isFinite(lon)) continue;
-
-        let entry = byCountry.get(iso2);
-        if (!entry) byCountry.set(iso2, entry = { cells: new Map(), names: new Map() });
-        const rec = { lat, lon, code: state.state_code };
-
-        const key = Math.round(lat * 2) + "," + Math.round(lon * 2);
-        let cell = entry.cells.get(key);
-        if (!cell) entry.cells.set(key, cell = []);
-        cell.push(rec);
-
-        const n = fold(city.name);
-        let named = entry.names.get(n);
-        if (!named) entry.names.set(n, named = []);
-        named.push(rec);
-      }
-    }
+/* One line per "<country>.<adminCode>", straight from GeoNames. */
+function readAdmin1(){
+  const map = new Map();
+  for (const line of fs.readFileSync(ADMIN1, "utf8").split("\n")){
+    if (!line || line.startsWith("#")) continue;
+    const [key, name] = line.split("\t");
+    if (key && name) map.set(key.trim(), name.trim());
   }
-  return { stateName, byCountry };
+  return map;
 }
 
-/* Name match first — the Aachen in Germany is the one in North Rhine-
-   Westphalia whatever its coordinates round to, and where a name repeats the
-   nearest wins. Failing that take whichever ISO-coded city is closest, which
-   is nearly always in the same region, since regions are far larger than the
-   gaps between towns. */
-function resolveRegion(index, iso2, name, lat, lon){
-  const entry = index.byCountry.get(iso2);
-  if (!entry) return "";
-
-  const named = entry.names.get(fold(name));
-  if (named){
-    let best = null, bestD = Infinity;
-    for (const r of named){
-      const d = distKm(lat, lon, r.lat, r.lon);
-      if (d < bestD){ bestD = d; best = r; }
-    }
-    if (best && bestD <= MATCH_KM) return index.stateName.get(iso2 + "/" + best.code) || "";
+/* Readability layer. GeoNames names a division the way its own gazetteer does,
+   which is not always how an English speaker would: "Latium" for Lazio,
+   "Jiangsu Sheng" for Jiangsu. Two mechanical rules plus an explicit file. */
+function readRegionNames(){
+  const map = new Map();
+  if (!fs.existsSync(REGIONS)) return map;
+  for (const line of fs.readFileSync(REGIONS, "utf8").split("\n")){
+    if (!line.trim() || line.startsWith("#")) continue;
+    const [key, name] = line.split("\t").map((x) => (x || "").trim());
+    if (key && name) map.set(key, name);
   }
+  return map;
+}
 
-  let best = null, bestD = Infinity;
-  const cLat = Math.round(lat * 2), cLon = Math.round(lon * 2);
-  for (let dy = -1; dy <= 1; dy++){
-    for (let dx = -1; dx <= 1; dx++){
-      const cell = entry.cells.get((cLat + dy) + "," + (cLon + dx));
-      if (!cell) continue;
-      for (const r of cell){
-        const d = distKm(lat, lon, r.lat, r.lon);
-        if (d < bestD){ bestD = d; best = r; }
-      }
-    }
-  }
-  if (best && bestD <= MATCH_KM) return index.stateName.get(iso2 + "/" + best.code) || "";
-  return "";
+function displayRegion(key, authoritative, preferred){
+  if (preferred.has(key)) return preferred.get(key);
+  return authoritative
+    /* Romanised Chinese generics: Sheng = province, Shi = municipality,
+       Zizhiqu = autonomous region. English drops all three. */
+    .replace(/\s+(Sheng|Shi|Zizhiqu)$/, "")
+    /* GeoNames suffixes a bare disambiguator on a handful of entries. */
+    .replace(/\s+\(general\)$/i, "");
 }
 
 /* ------------------------------------------------------------------ run --- */
@@ -214,14 +177,19 @@ const picked = allCities.filter((c) =>
   (c.population >= POP_MIN && !WEAK.has(c.featureCode)) || ALWAYS.has(c.featureCode));
 console.log("  population >= " + POP_MIN + ", plus capitals and admin seats: " + picked.length);
 
-console.log("indexing ISO subdivisions…");
-const index = buildRegionIndex();
+console.log("reading the admin1 table…");
+const admin1 = readAdmin1();
+const preferredRegion = readRegionNames();
 const exonyms = readExonyms();
 
 const countryName = new Map();
-for (const c of csc.getAllCountries()) countryName.set(c.iso2, c.name);
+for (const line of fs.readFileSync(COUNTRIES, "utf8").split("\n")){
+  if (!line.trim() || line.startsWith("#")) continue;
+  const [iso, name] = line.split("\t").map((x) => (x || "").trim());
+  if (iso && name) countryName.set(iso, name);
+}
 
-console.log("resolving time zones and regions…");
+console.log("resolving time zones and looking up regions…");
 const rows = [];
 let noTz = 0, noCountry = 0, noRegion = 0;
 
@@ -237,7 +205,12 @@ for (const c of picked){
   const country = countryName.get(c.country);
   if (!country){ noCountry++; continue; }
 
-  const region = resolveRegion(index, c.country, c.name, lat, lon);
+  /* Looked up, not inferred. No entry means no region — the interface shows
+     name and country, which is honest, rather than a nearby guess. */
+  const adminKey = c.country + "." + c.adminCode;
+  const authoritative = admin1.get(adminKey) || "";
+  const region = authoritative ? displayRegion(adminKey, authoritative, preferredRegion) : "";
+  if (!region) noRegion++;
 
   /* Alternative names, pipe-separated, emitted only when there is something
      to say. The FIRST entry is always the accent-folded name, which is what
@@ -252,42 +225,13 @@ for (const c of picked){
   rows.push({
     name: c.name, country, lat: round2(lat), lon: round2(lon), tz, region,
     alias: Array.from(new Set(alts)).join("|"), pop: c.population, id: c.cityId,
-    admin: c.country + "/" + c.adminCode,
     key: folded + "|" + c.country + "|" + region
   });
 }
 
 console.log("  dropped, unusable time zone: " + noTz);
 console.log("  dropped, unknown country: " + noCountry);
-
-/* Vote each GeoNames admin area on to a single region name. */
-const ballots = new Map();
-for (const r of rows){
-  let box = ballots.get(r.admin);
-  if (!box) ballots.set(r.admin, box = new Map());
-  box.set(r.region, (box.get(r.region) || 0) + 1);
-}
-const elected = new Map();
-let decided = 0;
-for (const [admin, box] of ballots){
-  const override = OVERRIDE.get(admin);
-  if (override){ elected.set(admin, override); decided++; continue; }
-  let best = "", bestN = 0, total = 0;
-  for (const [name, n] of box){
-    total += n;
-    if (name && n > bestN){ best = name; bestN = n; }
-  }
-  if (best && bestN / total >= VOTE_SHARE){ elected.set(admin, best); decided++; }
-}
-for (const r of rows){
-  const won = elected.get(r.admin);
-  if (won) r.region = won;
-  r.key = fold(r.name) + "|" + r.admin.split("/")[0] + "|" + r.region;
-}
-console.log("  admin areas: " + ballots.size + ", agreed on a name: " + decided +
-  " (" + (100 * decided / ballots.size).toFixed(1) + "%), " +
-  OVERRIDE.size + " corrected by hand");
-noRegion = rows.filter((r) => !r.region).length;
+console.log("  no admin1 entry, region left blank: " + noRegion);
 
 /* GeoNames carries near-duplicate records for the same settlement (a PPL and
    a PPLA a few hundred metres apart). Keep the most populous of each. */

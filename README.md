@@ -71,6 +71,9 @@ serve.js                  dependency-free static server
 smoke.js                  headless test suite
 tools/build-cities.js     regenerates data/cities.js — run by hand, not a build
 tools/exonyms.tsv         English names the source data doesn't carry
+tools/geonames-admin1.tsv GeoNames' admin1 table — regions, looked up not guessed
+tools/countries.tsv       country names, corrected
+tools/regions.tsv         region names where the authoritative one isn't readable
 docs/IMPLEMENTATION.md    what was built, and what was deliberately left
 ```
 
@@ -132,9 +135,17 @@ cd tools && npm install && node build-cities.js
 
 `tools/` has its own manifest, so `npm install` at the root still installs
 jsdom and nothing else, and CI never sees these packages. Place data is from
-[GeoNames](https://www.geonames.org/), CC BY 4.0; regions are ISO 3166-2; time
-zones are derived from the tz boundary shapes. The population floor is a single
-constant at the top of the script.
+[GeoNames](https://www.geonames.org/), CC BY 4.0; time zones come from the tz
+boundary shapes. The population floor is a single constant at the top.
+
+**Regions are looked up, not inferred.** Every place carries a GeoNames admin
+code, and `tools/geonames-admin1.tsv` is GeoNames' own table of what those
+codes mean, vendored so a regeneration needs no network. About 5% of places
+have no entry in it and show name and country alone — which is the honest
+answer. An earlier version guessed the region instead, by name-matching and
+then by proximity, and put 45 Jiangsu cities including Nanjing in "Taiwan
+Province". Where the authoritative name is not the readable one — GeoNames
+says "Latium" for Lazio — `tools/regions.tsv` overrides it explicitly.
 
 ## Tests
 
@@ -157,7 +168,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**200 checks.** The suite drives the real page in a DOM and tests behaviour,
+**204 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
