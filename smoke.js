@@ -633,6 +633,46 @@ setTimeout(() => {
       return true;
     });
 
+    // The app writes cityLabel() into its own input on every selection. If that
+    // string cannot be searched, editing the field looks like the place has
+    // vanished — and pushes the user at the network for a city already here.
+    check("the app can find the labels it writes itself", () => {
+      const missed = [];
+      for (let i = 0; i < 2000; i += 7){
+        const label = window.cityLabel(i);
+        if (window.searchCities(label).indexOf(i) !== 0) missed.push(label);
+        if (missed.length > 3) break;
+      }
+      if (missed.length) throw new Error("not found first: " + missed.join(" / "));
+      return true;
+    });
+    // City / State / Country, everywhere a place is shown — the chart readout
+    // used to drop the state, losing exactly the disambiguation it exists for.
+    check("the chart readout names the state, not just the country", () => {
+      window._pickCityIdx(window.searchCities("springfield il")[0]);
+      setForm("1974-03-11", "07:45", false);
+      window.renderChartOut(window.computeChart());
+      const shown = document.getElementById("chartOut").textContent;
+      if (!/Springfield, Illinois, United States/.test(shown))
+        throw new Error("readout says: " + (shown.match(/in [^(]+\(UTC/) || ["?"])[0]);
+      return true;
+    });
+    check("two-part City, Country still resolves", () => {
+      for (const [q, want] of [["London, United Kingdom", "London"],
+                               ["Houston, United States", "Houston"],
+                               ["Mumbai, India", "Mumbai"]]){
+        const r = window.searchCities(q);
+        if (!r.length) throw new Error("no results for " + q);
+        if (px("CITIES[" + r[0] + "][0]") !== want) throw new Error(q + " -> " + px("CITIES[" + r[0] + "][0]"));
+      }
+      return true;
+    });
+    check("an exact name outranks a longer one that starts the same", () => {
+      const first = (q) => px("CITIES[" + window.searchCities(q)[0] + "][0]");
+      if (first("victoria") !== "Victoria") throw new Error("victoria -> " + first("victoria"));
+      if (first("york") !== "York") throw new Error("york -> " + first("york"));
+      return true;
+    });
     check("picking sets chosenCity", () => {
       window._pickCityIdx(window.searchCities("london")[0]);
       if (!window.chosenCity) throw new Error("not set");
