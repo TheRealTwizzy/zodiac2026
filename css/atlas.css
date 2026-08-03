@@ -59,6 +59,7 @@ html[data-theme="light"]{
   --stroke:rgba(40,52,110,.16);
   --stroke-2:rgba(40,52,110,.3);
 
+  --warn-text:#6b4400;
   --text:#141a33;
   --text-2:#3a4468;
   --muted:#5d6689;
@@ -595,7 +596,10 @@ html{background:#03040c}
 :root{
   --nav-h:58px;
   --ok:#3fdc8b;
+  /* #ffd35e reads at 1.4:1 on the light theme — invisible. Warning text gets
+     its own token so each theme can pick a legible one. */
   --warn:#ffd35e;
+  --warn-text:#ffd35e;
 }
 
 /* ---------- top navigation ---------- */
@@ -1369,7 +1373,13 @@ svg#adial:active{cursor:grabbing}
 }
 /* var(--text) rather than a hard #fff: on the light theme the highlight is a
    pale lilac, and white on it was very nearly invisible. */
-.ac-list button:hover,.ac-list button.hi{background:rgba(167,139,250,.22);color:var(--text)}
+.ac-list button:hover{background:rgba(167,139,250,.22);color:var(--text)}
+/* The keyboard highlight was a .22 tint — about 1.4:1 against the row next to
+   it, which is not a selection indicator. Give it a border it cannot lose. */
+.ac-list button.hi{
+  background:rgba(167,139,250,.34);color:var(--text);
+  box-shadow:inset 3px 0 0 var(--accent,#a78bfa);
+}
 /* Region plus country makes this line long enough to wrap on a phone, which
    would make every row a different height. Let it truncate instead. */
 .ac-list button small{
@@ -1379,10 +1389,14 @@ svg#adial:active{cursor:grabbing}
 /* Rows that came from, or offer to go to, the network — visibly not the same
    thing as a place that shipped with the site. */
 .ac-list button.ask{color:var(--accent-2,#a78bfa)}
-.ac-list button.ask small,.ac-list button.web small{color:var(--faint);opacity:.85}
+/* These carry the privacy disclosure, so they have to be readable: --faint at
+   .85 opacity measured 2.5:1. */
+.ac-list button.ask small,.ac-list button.web small{color:var(--text-2)}
 .ac-list button.web{border-left:2px solid rgba(167,139,250,.55)}
 .field .hint .consent{display:block;line-height:1.7}
-.field .hint .consent .chip{margin-top:4px;font-size:11px;padding:2px 8px}
+/* The 44px rule is inside a max-width:820px block, so on desktop these were
+   19px high. They are the consent control; they get a real target everywhere. */
+.field .hint .consent .chip{margin-top:4px;font-size:11.5px;padding:0 12px;min-height:32px}
 
 .chart-layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:24px;align-items:start}
 @media(max-width:1040px){.chart-layout{grid-template-columns:1fr}}

@@ -76,7 +76,8 @@ function webPlaceSearch(query, onOk, onErr){
   if (webAbort) webAbort.abort();
   var ctrl = new AbortController();
   webAbort = ctrl;
-  var timer = setTimeout(function(){ ctrl.abort(); }, GEO_TIMEOUT);
+  var timedOut = false;
+  var timer = setTimeout(function(){ timedOut = true; ctrl.abort(); }, GEO_TIMEOUT);
 
   var url = GEO_ENDPOINT + "?name=" + encodeURIComponent(query) +
     "&count=" + GEO_COUNT + "&language=en&format=json";
@@ -101,8 +102,11 @@ function webPlaceSearch(query, onOk, onErr){
   }).catch(function(err){
     clearTimeout(timer);
     if (webAbort === ctrl) webAbort = null;
-    /* An abort is the person typing, not a failure — say nothing. */
-    if (err && err.name === "AbortError") return;
+    /* An abort raised by the person typing is not a failure and says nothing.
+       An abort we raised ourselves on the timeout very much is: reporting it as
+       a user action left the caller believing a request was still in flight,
+       and the feature stayed wedged for the rest of the session. */
+    if (err && err.name === "AbortError" && !timedOut) return;
     onErr(err);
   });
 }

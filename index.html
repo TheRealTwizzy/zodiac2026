@@ -311,7 +311,7 @@
           <input type="text" id="cPlace" placeholder="Start typing a city…" role="combobox"
                  aria-expanded="false" aria-controls="cPlaceList" aria-autocomplete="list">
           <div class="ac-list" id="cPlaceList" role="listbox"></div>
-          <div class="hint" id="cPlaceHint">Time zone and daylight saving are handled automatically</div>
+          <div class="hint" id="cPlaceHint" role="status" aria-live="polite">Time zone and daylight saving are handled automatically</div>
         </div>
       </div>
       <div class="frow">
@@ -460,6 +460,10 @@
   better than 20 arcseconds<br>
   Astrology is presented here as a symbolic tradition and a piece of cultural history,
   not as a predictive science.<br>
+  Place names, coordinates and administrative regions from
+  <a class="footlink" href="https://www.geonames.org/" rel="noopener noreferrer">GeoNames</a>,
+  used under <a class="footlink" href="https://creativecommons.org/licenses/by/4.0/"
+  rel="noopener noreferrer">CC&nbsp;BY&nbsp;4.0</a><br>
   <button class="footlink" data-go="about">How to read this site →</button>
 </footer>
 
