@@ -181,8 +181,25 @@ function fold(s){
    records whose name contains a word starting with the same two letters. And
    because it is filled by walking CITIES in order, and CITIES is sorted by
    population, every bucket comes out ranked already — nothing sorts at query
-   time.                                                                      */
+   time.
+
+   Two more indexes are built in the same pass, both replacing a linear scan
+   that used to happen per query: CCITY for "list this country's cities" and
+   NBUCKET for "is this token the start of a region or country name".         */
 var CNAME = null, CTEXT = null, CBUCKET = null, CFOLD = null, AFOLD = null;
+
+/* country index -> that country's records, population-ranked, capped at the 40
+   the dropdown can show. Typing a country's whole name used to walk all 49,564
+   records looking for it, and for the 130 countries with fewer than 40 places
+   in the file it walked every one of them: "monaco" cost 7.5ms against
+   "london" at 0.4ms. */
+var CCITY = null;
+
+/* two-letter prefix -> the region and country names starting with it. */
+var NBUCKET = null;
+
+/* How many records the index has absorbed. See buildCityIndexTo. */
+var cityIndexAt = 0;
 
 /* Word separators, listed rather than derived, so that letters in every script
    survive. Written as an explicit class rather than \p{L} so the file still
@@ -190,12 +207,40 @@ var CNAME = null, CTEXT = null, CBUCKET = null, CFOLD = null, AFOLD = null;
    classic script takes down everything after it. */
 var WORD_SPLIT = /[\s'".,;:()\[\]{}\/\\|_+*&#!?@~^$%=<>`\u2018\u2019\u201c\u201d-]+/g;
 
-function buildCityIndex(){
-  if (CBUCKET) return;
-  var n = CITIES.length;
-  CNAME = new Array(n); CTEXT = new Array(n); CBUCKET = Object.create(null);
+/* Everything that is cheap and has to exist before the first record is read. */
+function indexBegin(){
+  var n = CITIES.length, i;
+  CNAME = new Array(n); CTEXT = new Array(n);
+  CBUCKET = Object.create(null);
+  CCITY = Object.create(null);
+  cityIndexAt = 0;
 
-  for (var i = 0; i < n; i++){
+  CFOLD = CTRY.map(fold);
+  AFOLD = ADM.map(fold);
+
+  /* narrowsPlace() asks "could this token be a region or a country" on nearly
+     every search, and answered it by scanning all 3,733 names — 0.53ms each
+     time it came up empty. Bucket them by first two letters, the same trick
+     CBUCKET plays on the places. */
+  NBUCKET = Object.create(null);
+  function bucket(s){
+    if (s.length < 2) return;
+    var p = s.slice(0, 2);
+    (NBUCKET[p] || (NBUCKET[p] = [])).push(s);
+  }
+  for (i = 1; i < AFOLD.length; i++) bucket(AFOLD[i]);
+  for (i = 0; i < CFOLD.length; i++) bucket(CFOLD[i]);
+}
+
+/* Absorb records up to `limit`, picking up wherever the last call stopped.
+   Splitting the build this way is what lets it happen ahead of time in slices
+   rather than all at once inside a keystroke — see prebuildCityIndex. */
+function buildCityIndexTo(limit){
+  if (CBUCKET === null) indexBegin();
+  var n = CITIES.length;
+  if (limit > n) limit = n;
+
+  for (var i = cityIndexAt; i < limit; i++){
     var c = CITIES[i];
     /* The alias field leads with the folded name whenever it differs from a
        plain lowercasing, which is why this never has to call normalize(). */
@@ -210,6 +255,13 @@ function buildCityIndex(){
     var text = " " + alias.replace(WORD_SPLIT, " ").trim() + " ";
     CTEXT[i] = text;
 
+    /* Same argument as the buckets: CITIES is population-ordered, so appending
+       in order leaves each country's list ranked with nothing to sort. Forty is
+       what the dropdown shows and all lookupCities() would have kept, so
+       remembering more would be waste. */
+    var byC = CCITY[c[1]] || (CCITY[c[1]] = []);
+    if (byC.length < 40) byC.push(i);
+
     var seen = "";
     var words = text.split(" ");
     for (var w = 0; w < words.length; w++){
@@ -221,17 +273,64 @@ function buildCityIndex(){
       (CBUCKET[p] || (CBUCKET[p] = [])).push(i);
     }
   }
+  cityIndexAt = limit;
+}
 
-  CFOLD = CTRY.map(fold);
-  AFOLD = ADM.map(fold);
+function cityIndexReady(){
+  return CBUCKET !== null && cityIndexAt >= CITIES.length;
+}
+
+/* Finish the index now. Everything that reads it calls this first, so the
+   incremental build below is only ever an optimisation: a keystroke that beats
+   it pays whatever is left and gets the same answer.                          */
+function buildCityIndex(){
+  if (!cityIndexReady()) buildCityIndexTo(CITIES.length);
+}
+
+/* Finish the index eventually.
+ *
+ * Building it over 49,564 records costs ~130ms on a desktop and several times
+ * that on a phone, and it used to happen inside the first keystroke — the one
+ * moment someone is definitely watching the box. It is the same work wherever
+ * it runs, so run it as soon as the table lands and cut it into slices small
+ * enough that missing a frame is the worst case.
+ */
+var CITY_SLICE = 2000;        /* records per slice — about 5ms of the 130 */
+var prebuilding = false;
+
+/* requestIdleCallback where there is one, a plain timeout where there is not.
+   No build step here means no polyfill, and Safari only shipped rIC in 2022. */
+function whenIdle(fn){
+  if (typeof requestIdleCallback === "function") requestIdleCallback(fn, { timeout: 500 });
+  else setTimeout(fn, 0);
+}
+
+function prebuildCityIndex(){
+  if (prebuilding || !citiesLoaded() || cityIndexReady()) return;
+  prebuilding = true;
+  whenIdle(function slice(){
+    if (cityIndexReady()){ prebuilding = false; return; }
+    buildCityIndexTo(cityIndexAt + CITY_SLICE);
+    whenIdle(slice);
+  });
 }
 
 /* Does this look like a region or country someone appended to narrow things
    down — the "il" in "springfield il"? */
 function narrowsPlace(t){
   var i;
-  for (i = 1; i < AFOLD.length; i++) if (AFOLD[i].indexOf(t) === 0) return true;
-  for (i = 0; i < CFOLD.length; i++) if (CFOLD[i].indexOf(t) === 0) return true;
+  /* A single letter cannot be bucketed on two. It is a poor narrowing anyway,
+     but the answer has to stay exactly what it was, so scan for that case. */
+  if (t.length < 2){
+    for (i = 1; i < AFOLD.length; i++) if (AFOLD[i].indexOf(t) === 0) return true;
+    for (i = 0; i < CFOLD.length; i++) if (CFOLD[i].indexOf(t) === 0) return true;
+    return false;
+  }
+  /* A name this token prefixes must start with the token's own first two
+     characters, so only that bucket can hold a match. */
+  var names = NBUCKET[t.slice(0, 2)];
+  if (!names) return false;
+  for (i = 0; i < names.length; i++) if (names[i].indexOf(t) === 0) return true;
   return false;
 }
 
@@ -267,11 +366,13 @@ function lookupCities(head, tail){
     var country = -1;
     for (i = 0; i < CFOLD.length; i++) if (CFOLD[i] === head){ country = i; break; }
     if (country >= 0){
-      var byCountry = [];
-      for (i = 0; i < CITIES.length && byCountry.length < 40; i++){
-        if (CITIES[i][1] === country) byCountry.push(i);
+      /* CCITY already holds this country's forty, ranked. The scan it replaced
+         read every record in the file whenever the country had fewer than
+         forty places — which is 130 of the 245. */
+      var byCountry = (CCITY[country] || []).slice(0, 40);
+      for (i = 0; i < out.length && byCountry.length < 40; i++){
+        if (byCountry.indexOf(out[i]) < 0) byCountry.push(out[i]);
       }
-      for (i = 0; i < out.length; i++) if (byCountry.indexOf(out[i]) < 0) byCountry.push(out[i]);
       out = byCountry;
     }
   }
@@ -597,6 +698,8 @@ function saveChartInputs(){
     noTime: !!($("#cNoTime") && $("#cNoTime").checked),
     shift: timeShiftMin
   });
+  /* Something is now stored, so the way to remove it has to be on screen. */
+  drawForget("idle");
 }
 
 function restoreChartInputs(){
@@ -616,6 +719,90 @@ function restoreChartInputs(){
   $("#cPlace").value = s.label || s.city.name;
   showPlaceCoords(s.city.lat, s.city.lon, s.city.tz);
   return true;
+}
+
+/* ------------------------------------------------------ forget birth data - *
+   Because the form remembers, a date of birth, a time of birth and a
+   birthplace sit in this browser's storage from the first calculation onward.
+   Remembering is the right default — it is why the page resumes where you left
+   it — but having no way back out of it is not, least of all on a machine
+   someone shares or borrowed. So: one control, in the section that put the
+   data there, that takes it away again.
+
+   It is drawn rather than declared in the markup so that it can be absent
+   entirely when there is nothing stored. A permanent "forget my birth data"
+   button on a page that has never been given any is its own small lie.        */
+
+function forgetHTML(mode){
+  if (mode === "ask"){
+    return '<span class="forget-ask">Forget the saved date, time and birthplace? ' +
+      '<button type="button" class="chip ghost" data-forget="do">Forget them</button> ' +
+      '<button type="button" class="chip ghost" data-forget="cancel">Keep them</button></span>';
+  }
+  if (mode === "done"){
+    return '<span class="forget-done">Forgotten. Nothing about your birth is left on this device.</span>';
+  }
+  return '<button type="button" class="chip ghost" data-forget="ask">Forget my birth data</button>' +
+    '<small>Your date, time and birthplace are kept in this browser so the form is ' +
+    'still filled in next time. They have never been sent anywhere.</small>';
+}
+
+function drawForget(mode){
+  var box = $("#cForget");
+  if (!box) return;
+  /* "done" is the one state worth showing with nothing stored — it is the
+     confirmation that nothing is stored. */
+  if (mode !== "done" && load("chartInputs", null) === null){
+    box.innerHTML = "";
+    box.classList.remove("on");
+    return;
+  }
+  box.classList.add("on");
+  box.innerHTML = forgetHTML(mode);
+}
+
+function doForget(){
+  forget("chartInputs");
+
+  /* Erase it from the page too, not only from storage. Leaving the chart on
+     screen and the birthplace in the box while claiming to have forgotten it
+     would be the wrong half of the job. */
+  chosenCity = null;
+  lastChart = null;
+  shownChart = null;
+  timeShiftMin = 0;
+  $("#cDate").value = "1990-06-15";
+  $("#cTime").value = "12:00";
+  if ($("#cNoTime")) $("#cNoTime").checked = false;
+  syncTimeField();
+  $("#cPlace").value = "";
+  setPlaceStatus(PLACE_HINT);
+  var out = $("#chartOut"); if (out) out.innerHTML = "";
+  var warn = $("#cWarn"); if (warn) warn.innerHTML = "";
+
+  /* Copying a share link puts the whole chart in the address bar, so the birth
+     data can be sitting in the URL and in this tab's history as well. Clearing
+     the store and leaving that behind would be theatre. */
+  if (typeof location !== "undefined" && /^#\/chart\//.test(location.hash || "")){
+    writeHash("#/chart", true);
+  }
+
+  drawForget("done");
+  announce("Birth data forgotten.");
+}
+
+function wireForget(){
+  var box = $("#cForget");
+  if (!box) return;
+  box.addEventListener("click", function(e){
+    var b = e.target.closest("[data-forget]");
+    if (!b) return;
+    var what = b.dataset.forget;
+    if (what === "ask") drawForget("ask");
+    else if (what === "cancel") drawForget("idle");
+    else doForget();
+  });
+  drawForget("idle");
 }
 
 /* the time input is meaningless while "I don't know the birth time" is on */
@@ -1761,6 +1948,7 @@ function renderChartPage(){
   renderPresets();
   zodiacMode = load("zodiacMode", "tropical") === "sidereal" ? "sidereal" : "tropical";
   var hadSaved = restoreChartInputs();
+  wireForget();
 
   $("#cNoTime").addEventListener("change", function(){
     syncTimeField();
@@ -1776,7 +1964,10 @@ function renderChartPage(){
      stomp on the restored city's coordinate line while it loads. */
   if (!chosenCity) setPlaceStatus("Loading places…");
   ensureCities().then(function(){
-    if (!chosenCity) setPlaceStatus("Time zone and daylight saving are handled automatically");
+    if (!chosenCity) setPlaceStatus(PLACE_HINT);
+    /* And index it while the page is idle, rather than letting the first
+       keystroke pay for it. */
+    prebuildCityIndex();
   }, placeLoadFailed);
 
   $("#chartForm").addEventListener("submit", function(e){

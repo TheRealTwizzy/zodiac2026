@@ -114,6 +114,15 @@ Type a region or country after the name to narrow it: `springfield il`.
 Accents are optional in either direction, and English exonyms work — `cologne`
 finds Köln, `munchen` finds Munich.
 
+Searching 50,000 records per keystroke needs an index, and building one costs
+about 130 ms. That used to be spent inside the first keypress — the one moment
+someone is definitely watching the box. It now starts as soon as the table
+lands and runs in 2,000-record slices between frames, so the first query costs
+0.6 ms rather than 40. A query that arrives mid-build finishes the remainder
+itself, so the incremental path is only ever an optimisation, never a
+correctness question — and the tests check that a sliced build produces exactly
+the index a single pass does.
+
 **The web fallback.** A population floor of 5,000 still leaves out villages,
 and someone born in a village should not be told their birthplace does not
 exist. So when the built-in list comes up short, the dropdown offers one extra
@@ -155,6 +164,23 @@ then by proximity, and put 45 Jiangsu cities including Nanjing in "Taiwan
 Province". Where the authoritative name is not the readable one — GeoNames
 says "Latium" for Lazio — `tools/regions.tsv` overrides it explicitly.
 
+## What is kept on this device
+
+Calculating a chart saves the date, the time and the birthplace to
+`localStorage`, so the form is still filled in on the next visit. It stays on
+the device — there is no account and no server to send it anywhere.
+
+Remembering is the right default. Having no way out of it is not, particularly
+on a machine that is shared or borrowed, so a **Forget my birth data** control
+sits under the chart form whenever there is something to erase, and is absent
+when there is not. It asks once, then clears the store, the form, the rendered
+chart *and* the address bar — copying a share link writes the whole chart into
+the URL, and clearing storage while leaving that behind would be theatre.
+
+Everything else kept is preference rather than personal: the theme, the quiz
+score, which sections have been opened, the wheel's state, and whether the web
+place lookup was allowed. Clearing site data in the browser removes those.
+
 ## Tests
 
 ```
@@ -176,7 +202,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**214 checks.** The suite drives the real page in a DOM and tests behaviour,
+**230 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
@@ -186,7 +212,10 @@ known precession rate, and offline resilience by making `history` and
 for shape and range, and every time zone in the file is one `Intl` accepts.
 The claims made above about the web lookup are tests, not prose: that typing
 never reaches the wire, that the first use asks, that the request carries
-nothing but the typed text, and that a failure degrades to a message. It
+nothing but the typed text, and that a failure degrades to a message. So are
+the ones about forgetting: that the control is absent until there is something
+to erase, that it asks first, and that erasing empties the store, the form, the
+chart and the URL — including when `localStorage.removeItem` throws. It
 finishes with an end-to-end pass that renders every section and walks a full
 user journey.
 
