@@ -671,6 +671,20 @@ var LIMITS = [
     d:"The series is fitted for the modern era. Inside 1900–2100 expect agreement with " +
       "DE421 to better than 20 arcseconds. Outside it, expect arcminutes — sign " +
       "placements hold, precise degrees drift." },
+  { t:"Where places come from, and where they stop",
+    d:"Latitude, longitude and time zone come from GeoNames: every place with a " +
+      "population of 5,000 or more, plus capitals and administrative seats. " +
+      "Coordinates are the town centre to about a kilometre, far finer than a " +
+      "house cusp needs. The region shown beside a place is looked up in " +
+      "GeoNames' own table of administrative divisions, never guessed — and for " +
+      "about one place in twenty there is no entry, so only the country is " +
+      "shown rather than a nearby approximation." },
+  { t:"Searching the web for a place",
+    d:"Below a population of 5,000 a place will not be in the built-in list, so " +
+      "the search offers to look it up online. That request happens only when " +
+      "you click the button that offers it — never as you type — and it sends " +
+      "only the text in the box, to Open-Meteo's public geocoder. Nothing about " +
+      "your date, time or chart is sent, and you can turn the offer off for good." },
   { t:"No birth time",
     d:"The Ascendant moves a degree every four minutes and the houses move with it. " +
       "Without a time they are withheld entirely rather than computed from a guessed " +

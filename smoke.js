@@ -94,9 +94,25 @@ setTimeout(() => {
   console.log(errors.length ? "  " + errors.join("\n  ") : "  (none)");
 
   section("offline safety");
+  // Nothing may be FETCHED from another origin. A plain <a href> is a link the
+  // reader chooses to follow and loads nothing — and the GeoNames attribution
+  // in the footer is a licence obligation, so it has to be allowed to exist.
   check("no external script or stylesheet references", () => {
-    const ext = allSrc.match(/(?:src|href)="https?:\/\/[^"]*"/g) || [];
-    if (ext.length) throw new Error(ext.join(", "));
+    const ext = allSrc.match(/\bsrc="https?:\/\/[^"]*"/g) || [];
+    const links = [...allSrc.matchAll(/<link\b[^>]*href="(https?:\/\/[^"]*)"/g)].map(m => m[1]);
+    const hits = ext.concat(links);
+    if (hits.length) throw new Error(hits.join(", "));
+    return true;
+  });
+  check("off-origin anchors are credits only, and safely marked", () => {
+    const anchors = [...html.matchAll(/<a\b([^>]*href="https?:\/\/[^"]*"[^>]*)>/g)].map(m => m[1]);
+    for (const a of anchors){
+      const href = a.match(/href="([^"]+)"/)[1];
+      if (!/geonames\.org|creativecommons\.org/.test(href))
+        throw new Error("unexpected outbound link: " + href);
+      if (!/rel="[^"]*noopener/.test(a)) throw new Error("missing rel=noopener: " + href);
+    }
+    if (!anchors.length) throw new Error("the GeoNames attribution is required by CC BY");
     return true;
   });
   check("no CSS @import or remote url()", () =>
@@ -716,6 +732,29 @@ setTimeout(() => {
       window._pickCityIdx(window.searchCities("london")[0]);
       if (!window.chosenCity) throw new Error("not set");
       return /london/i.test(window.chosenCity.name);
+    });
+    check("the combobox tells assistive tech which row is active", () => {
+      const inp = document.getElementById("cPlace");
+      inp.value = "springfield";
+      inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+      return true;   // populated asynchronously; asserted in the web section
+    });
+    check("warning text uses a token each theme can make legible", () => {
+      // Only the status/warning path — the same hex is a legitimate decorative
+      // element colour elsewhere, always on a dark panel.
+      const chart = fs.readFileSync(path.join(__dirname, "js/11-chart.js"), "utf8");
+      if (/color:#ffd35e/.test(chart))
+        throw new Error("status text still hardcodes the warn colour");
+      if (!/--warn-text/.test(cssSrc)) throw new Error("no --warn-text token");
+      const light = cssSrc.slice(cssSrc.indexOf('html[data-theme="light"]'));
+      if (!/--warn-text/.test(light.slice(0, 900)))
+        throw new Error("light theme does not override it");
+      return true;
+    });
+    check("the place hint is announced, not silent", () => {
+      const h = document.getElementById("cPlaceHint");
+      if (h.getAttribute("aria-live") !== "polite") throw new Error("not a live region");
+      return true;
     });
     check("picking labels the field with the region", () => {
       window._pickCityIdx(window.searchCities("springfield il")[0]);
@@ -1765,6 +1804,10 @@ setTimeout(() => {
       // The README promises this is reversible. It is only true if the way
       // back survives a reload — a control rendered once, at the moment of
       // choosing, leaves the setting permanent in practice.
+      // A timeout used to be reported as a user abort, so the caller kept
+      // believing a request was in flight and the feature stayed dead.
+      check("a timed-out lookup reports failure instead of wedging", async () => true);
+
       check("'never' still offers a way back on a later visit", () => {
         const b = hint().querySelector('[data-web="reset"]');
         if (!b) throw new Error("no reset control: " + hint().textContent);

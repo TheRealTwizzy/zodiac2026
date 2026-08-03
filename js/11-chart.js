@@ -126,7 +126,7 @@ function setPlaceStatus(msg, tone){
   var hint = $("#cPlaceHint");
   if (!hint) return;
   hint.innerHTML = tone
-    ? '<span style="color:' + (tone === "warn" ? "#ffd35e" : "var(--muted)") + '">' + msg + "</span>"
+    ? '<span style="color:' + (tone === "warn" ? "var(--warn-text)" : "var(--muted)") + '">' + msg + "</span>"
     : msg;
 }
 
@@ -347,20 +347,27 @@ function wirePlace(){
      thing without caring where any given row came from. */
   var rows = [], hi = 0, webBusy = false, lastQuery = "";
 
-  function close(){ list.classList.remove("on"); inp.setAttribute("aria-expanded", "false"); }
+  function close(){
+    list.classList.remove("on");
+    inp.setAttribute("aria-expanded", "false");
+    inp.removeAttribute("aria-activedescendant");
+  }
 
   function rowHTML(r, k){
     var cls = k === hi ? "hi" : "";
     if (r.kind === "city"){
-      return '<button type="button" data-row="' + k + '" class="' + cls + '">' +
+      return '<button type="button" role="option" id="cPlaceOpt' + k + '" data-row="' + k + '" ' +
+        'aria-selected="' + (k === hi) + '" class="' + cls + '">' +
         E(CITIES[r.i][0]) + "<small>" + E(cityRegion(r.i)) + "</small></button>";
     }
     if (r.kind === "web"){
       var tail = [r.w.region, r.w.country].filter(Boolean).join(", ");
-      return '<button type="button" data-row="' + k + '" class="web ' + cls + '">' +
+      return '<button type="button" role="option" id="cPlaceOpt' + k + '" data-row="' + k + '" ' +
+        'aria-selected="' + (k === hi) + '" class="web ' + cls + '">' +
         E(r.w.name) + "<small>" + (tail ? E(tail) + " · " : "") + "from the web</small></button>";
     }
-    return '<button type="button" data-row="' + k + '" class="ask ' + cls + '">' +
+    return '<button type="button" role="option" id="cPlaceOpt' + k + '" data-row="' + k + '" ' +
+      'aria-selected="' + (k === hi) + '" class="ask ' + cls + '">' +
       (webBusy ? "Searching…" : "Search the web for “" + E(r.q) + "”") +
       "<small>sends only that text to open-meteo.com</small></button>";
   }
@@ -370,6 +377,13 @@ function wirePlace(){
     list.innerHTML = rows.map(rowHTML).join("");
     list.classList.add("on");
     inp.setAttribute("aria-expanded", "true");
+    /* Arrow keys move a highlight the input still owns, so without this a
+       screen reader is told nothing at all as the selection moves. */
+    inp.setAttribute("aria-activedescendant", "cPlaceOpt" + hi);
+    /* The list is rebuilt wholesale on every keypress, which resets its scroll
+       — so the highlighted row could sit outside the visible box. */
+    var el = list.children[hi];
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
   }
 
   /* The offer to search the web appears only when the built-in table came up
@@ -513,9 +527,14 @@ function wirePlace(){
       offerReset();
       rows = rows.filter(function(r){ return r.kind !== "ask"; });
       draw();
+      /* Clicking a button in the hint line moves focus out of the input, so
+         nothing would close the list or take focus back. */
+      if (!rows.length) close();
+      inp.focus();
       return;
     }
     if (choice === "always") setWebConsent("always");
+    inp.focus();
     doWeb(pendingQuery);
   });
 
@@ -841,14 +860,14 @@ function computeChart(){
   var unknownTime = !!($("#cNoTime") && $("#cNoTime").checked);
   var tv = unknownTime ? "12:00" : ($("#cTime").value || "12:00");
   if (!dv){
-    $("#cDateHint").innerHTML = '<span style="color:#ffd35e">Pick a date to calculate ' +
+    $("#cDateHint").innerHTML = '<span style="color:var(--warn-text)">Pick a date to calculate ' +
       "from.</span>";
     $("#cDate").focus();
     return null;
   }
   $("#cDateHint").textContent = "1600 to 2200 — accuracy is best near the present";
   if (!chosenCity){
-    $("#cPlaceHint").innerHTML = '<span style="color:#ffd35e">Pick a city from the list — ' +
+    $("#cPlaceHint").innerHTML = '<span style="color:var(--warn-text)">Pick a city from the list — ' +
       "the Ascendant and houses need a latitude and longitude.</span>";
     $("#cPlace").focus();
     return null;
@@ -857,7 +876,7 @@ function computeChart(){
      a chart that was wrong by up to six and a half hours without saying so.
      Refuse instead — the same standard the rest of the page holds itself to. */
   if (!validTz(chosenCity.tz)){
-    $("#cPlaceHint").innerHTML = '<span style="color:#ffd35e">This browser does not ' +
+    $("#cPlaceHint").innerHTML = '<span style="color:var(--warn-text)">This browser does not ' +
       "recognise the time zone " + E(String(chosenCity.tz)) + ", so the chart would be " +
       "computed in the wrong one. Pick the place again, or update your browser.</span>";
     return null;
