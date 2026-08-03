@@ -5,6 +5,9 @@
 :root{
   /* void */
   --void-0:#03040c;
+  /* What shows below the fixed body gradient. Must match its last stop or a
+     band appears the moment the page is taller than the viewport. */
+  --canvas:#02030a;
   --void-1:#070a1c;
   --void-2:#0d1233;
   --nebula:#1b1046;
@@ -49,6 +52,7 @@
    enough to hold contrast on white without changing which colour means what. */
 html[data-theme="light"]{
   --void-0:#f7f8fc;
+  --canvas:#f7f8fc;
   --void-1:#eef1f9;
   --void-2:#e2e7f5;
   --nebula:#dcd8f5;
@@ -591,7 +595,7 @@ footer.foot{
    COSMIC ATLAS — site layer (nav, pages, new sections)
    ============================================================ */
 
-html{background:#03040c}
+html{background:var(--canvas)}
 
 :root{
   --nav-h:58px;
@@ -651,11 +655,9 @@ nav.mainnav::-webkit-scrollbar{display:none}
 }
 .navlink:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 /* faint dot marks a section already opened this browser */
-.navlink.seen::before{
-  content:"";position:absolute;top:4px;right:5px;width:4px;height:4px;border-radius:50%;
-  background:var(--accent);opacity:.5;
-}
-.navlink.seen[aria-current="page"]::before{display:none}
+/* A dot in the corner of every section you HAVEN'T got to reads as an unread
+   badge — the opposite of what it meant. Visited state is carried by the
+   current-page styling alone. */
 
 /* ---------- section pager ---------- */
 .pager{

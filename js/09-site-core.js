@@ -340,13 +340,30 @@ document.addEventListener("click", function(e){
     showTip(t, t.dataset.t); return; }
   if (!e.target.closest("#tip")) hideTip();
 });
+/* The tooltip sits a few pixels off the word, so a pointer travelling towards
+   it necessarily crosses ground that is neither. Hiding on mouseout made the
+   "Read the full entry" link inside it unreachable — it vanished on the way.
+   Hide on a short delay instead, and cancel that delay if the pointer arrives
+   at the tooltip. */
+var tipHideTimer = null;
+function cancelTipHide(){ clearTimeout(tipHideTimer); tipHideTimer = null; }
+function scheduleTipHide(){ cancelTipHide(); tipHideTimer = setTimeout(hideTip, 260); }
+
 document.addEventListener("mouseover", function(e){
+  if ("ontouchstart" in window) return;
+  if (e.target.closest("#tip")){ cancelTipHide(); return; }
   var t = e.target.closest(".term");
-  if (t && !("ontouchstart" in window)) showTip(t, t.dataset.t);
+  if (t){ cancelTipHide(); showTip(t, t.dataset.t); }
 });
 document.addEventListener("mouseout", function(e){
-  var t = e.target.closest(".term");
-  if (t && !("ontouchstart" in window) && !e.relatedTarget?.closest?.("#tip")) hideTip();
+  if ("ontouchstart" in window) return;
+  var leavingTerm = e.target.closest(".term");
+  var leavingTip  = e.target.closest("#tip");
+  if (!leavingTerm && !leavingTip) return;
+  var to = e.relatedTarget && e.relatedTarget.closest
+    ? (e.relatedTarget.closest("#tip") || e.relatedTarget.closest(".term")) : null;
+  if (to) return;                     /* moved between the word and its tooltip */
+  scheduleTipHide();
 });
 function placeTip(el){
   var r = el.getBoundingClientRect();
