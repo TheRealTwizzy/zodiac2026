@@ -9,6 +9,14 @@ var BODY_ID = { Sun:"sun", Moon:"moon", Mercury:"mercury", Venus:"venus", Mars:"
   Jupiter:"jupiter", Saturn:"saturn", Uranus:"uranus", Neptune:"neptune", Pluto:"pluto" };
 var NODE_GLYPH = "☊";
 
+/* The bodies this particular chart actually has. Astro.chart withholds one
+   rather than reporting a value it cannot stand behind — currently Pluto
+   outside the years its series was fitted over — so nothing may assume every
+   name in BODY_ORDER is present. */
+function bodiesIn(ch){
+  return BODY_ORDER.filter(function(n){ return ch.bodies[n]; });
+}
+
 function signOf(lon){ return SIGNS[Math.floor(((lon % 360) + 360) % 360 / 30)]; }
 function degInSign(lon){ return ((lon % 360) + 360) % 360 % 30; }
 function fmtPos(lon){
@@ -29,13 +37,30 @@ function tzOffsetMin(tz, instantMs){
     dtf.formatToParts(new Date(instantMs)).forEach(function(x){ p[x.type] = x.value; });
     var asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second);
     return Math.round((asUTC - instantMs) / 60000);
-  } catch (err){ return 0; }
+  } catch (err){
+    /* An unrecognised zone used to return 0, which is indistinguishable from a
+       place genuinely on UTC — so the chart was computed in the wrong zone and
+       said nothing. That is not hypothetical: 289 shipped places sit on tzdb
+       zones added after 2015 (Asia/Yangon, Europe/Saratov, Asia/Famagusta,
+       America/Punta_Arenas), and an older browser rejects every one of them.
+       Return null so callers must decide. */
+    return null;
+  }
+}
+
+/* Does this browser's Intl know the zone at all? Same check the web lookup
+   applies to a geocoder result, applied to every other source too. */
+function validTz(tz){
+  if (typeof tz !== "string" || !tz) return false;
+  try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; }
+  catch (e){ return false; }
 }
 function localToUTCms(y, mo, d, h, mi, tz){
   var naive = Date.UTC(y, mo - 1, d, h, mi);
   var guess = naive;
   for (var i = 0; i < 4; i++){
     var off = tzOffsetMin(tz, guess);
+    if (off === null) return null;
     var next = naive - off * 60000;
     if (next === guess) break;
     guess = next;
@@ -555,12 +580,21 @@ function dstAnomaly(y, mo, d, h, mi, tz){
   var naive = Date.UTC(y, mo - 1, d, h, mi);
   var offA = tzOffsetMin(tz, naive - 12 * 3600000);
   var offB = tzOffsetMin(tz, naive + 12 * 3600000);
-  if (offA === offB) return null;
+  if (offA === null || offB === null || offA === offB) return null;
   var candidates = [naive - offA * 60000, naive - offB * 60000].filter(function(ms){
     return tzOffsetMin(tz, ms) === (naive - ms) / 60000;
   });
-  if (candidates.length > 1) return "ambiguous";
-  if (candidates.length === 0) return "skipped";
+  if (candidates.length === 0) return { kind:"skipped" };
+  if (candidates.length > 1){
+    /* Which of the two the chart actually used is decided by where the
+       fixed-point iteration in localToUTCms converges, and that depends on the
+       sign of the offset: the Americas land on the earlier instant, Europe,
+       Russia and eastern Australia on the later. The notice has to report what
+       happened rather than assert one of them. */
+    var used = localToUTCms(y, mo, d, h, mi, tz);
+    var earliest = Math.min(candidates[0], candidates[1]);
+    return { kind:"ambiguous", first: used === earliest };
+  }
   return null;
 }
 
@@ -574,14 +608,23 @@ function timeWarnings(dv, tv, city, unknownTime){
       "planets below are correct to within the Moon's daily drift. The Ascendant, " +
       "the Midheaven and every house placement need a time and are marked " +
       "unavailable." });
-    return out;
+    /* Fall through rather than return: the accuracy and Pluto notices below
+       describe the ephemeris, which does not care whether a time was given. */
   }
   if (y < 1900 || y > 2100){
     out.push({ tone:"info", text:"<b>Outside 1900–2100 the fit loosens.</b> The " +
       "planetary theory here is fitted to DE421 and is at its best near the " +
-      "present; this far out, expect arcminutes rather than arcseconds. Sign " +
-      "placements are unaffected, precise degrees may drift." });
+      "present; this far out, expect arcminutes rather than arcseconds for the " +
+      "Sun, Moon and planets through Neptune." });
   }
+  if (y < 1899 || y > 2050){
+    out.push({ tone:"warn", text:"<b>Pluto is not shown for this date.</b> Its " +
+      "series here is fitted over 1899–2050 and diverges sharply outside that " +
+      "window — by 2100 it would be most of a zodiac out. Rather than print a " +
+      "confident wrong position, and the aspects and patterns that would be " +
+      "built on it, Pluto is withheld." });
+  }
+  if (unknownTime) return out;
   if (y < 1970){
     out.push({ tone:"warn", text:"<b>Historical daylight saving is unreliable before " +
       "about 1970.</b> Time zone databases are thin and inconsistent that far back — " +
@@ -591,11 +634,12 @@ function timeWarnings(dv, tv, city, unknownTime){
   }
   var anomaly = null;
   try { anomaly = dstAnomaly(dp[0], dp[1], dp[2], tp[0], tp[1], city.tz); } catch (e){}
-  if (anomaly === "ambiguous"){
+  if (anomaly && anomaly.kind === "ambiguous"){
     out.push({ tone:"warn", text:"<b>This clock time happened twice.</b> The clocks " +
       "went back that night, so this local time maps to two different moments an " +
-      "hour apart. The earlier one was used — try the adjustment below for the other." });
-  } else if (anomaly === "skipped"){
+      "hour apart. The " + (anomaly.first ? "earlier" : "later") + " one was used — " +
+      "try the adjustment below for the other." });
+  } else if (anomaly && anomaly.kind === "skipped"){
     out.push({ tone:"warn", text:"<b>This clock time never existed.</b> The clocks " +
       "jumped forward past it that night. The nearest real moment was used." });
   }
@@ -635,9 +679,20 @@ function toSidereal(ch){
   });
   out.asc = Astro.norm360(ch.asc - ay);
   out.mc  = Astro.norm360(ch.mc - ay);
+  /* Whole Sign means the house IS the sign, so its cusps have to be rebuilt on
+     the sidereal sign boundaries rather than slid along with everything else.
+     Shifting them by the ayanamsa leaves every cusp ~6° inside a sign, which
+     silently moves bodies near a boundary into the wrong house — the one place
+     where switching zodiac changes a house assignment for the wrong reason.
+     Quadrant systems are genuine angles and do shift. */
   out.houses = { system: ch.houses.system,
-                 cusps: ch.houses.cusps.map(function(c){
-                   return Astro.norm360(c - ay); }) };
+                 cusps: ch.houses.system === "whole"
+                   ? (function(){
+                       var first = Math.floor(Astro.norm360(ch.asc - ay) / 30) * 30, c = [];
+                       for (var h = 0; h < 12; h++) c.push(Astro.norm360(first + h * 30));
+                       return c;
+                     })()
+                   : ch.houses.cusps.map(function(c){ return Astro.norm360(c - ay); }) };
   out.meta = {};
   Object.keys(ch.meta).forEach(function(k){ out.meta[k] = ch.meta[k]; });
   out.meta.zodiac = "sidereal";
@@ -759,8 +814,18 @@ function computeChart(){
     $("#cPlace").focus();
     return null;
   }
+  /* A zone this browser cannot resolve used to fall through as UTC and produce
+     a chart that was wrong by up to six and a half hours without saying so.
+     Refuse instead — the same standard the rest of the page holds itself to. */
+  if (!validTz(chosenCity.tz)){
+    $("#cPlaceHint").innerHTML = '<span style="color:#ffd35e">This browser does not ' +
+      "recognise the time zone " + E(String(chosenCity.tz)) + ", so the chart would be " +
+      "computed in the wrong one. Pick the place again, or update your browser.</span>";
+    return null;
+  }
   var dp = dv.split("-").map(Number), tp = tv.split(":").map(Number);
   var ms = localToUTCms(dp[0], dp[1], dp[2], tp[0], tp[1], chosenCity.tz);
+  if (ms === null) return null;
   if (!unknownTime && timeShiftMin) ms += timeShiftMin * 60000;
   var off = tzOffsetMin(chosenCity.tz, ms);
   var u = new Date(ms);
@@ -813,7 +878,15 @@ function applyChartSub(sub){
   if (p.length < 7) return false;
   var date = p[0], time = p[1], lat = parseFloat(p[2]), lon = parseFloat(p[3]);
   var tz = p[4], house = p[5], place = p[6], shift = p[7];
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(lat) || isNaN(lon)) return false;
+  /* A share link is untrusted input. The web lookup already refuses a result
+     whose coordinates or zone it cannot stand behind; a link deserves the same
+     checks, or "Europe/Lundon" silently moves the Ascendant a whole sign and a
+     coordinate of Infinity throws out through the renderer. isFinite rather
+     than isNaN — isNaN(Infinity) is false. */
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  if (!isFinite(lat) || lat < -90 || lat > 90) return false;
+  if (!isFinite(lon) || lon < -180 || lon > 180) return false;
+  if (!validTz(tz)) return false;
 
   /* Three parts is name,region,country; two is the older name,country and must
      keep working, because every link shared before regions existed has that
@@ -967,7 +1040,7 @@ function drawNatal(ch){
     });
 
   /* planets, with collision spreading */
-  var items = BODY_ORDER.map(function(n){
+  var items = bodiesIn(ch).map(function(n){
     return { n:n, lon:ch.bodies[n].lon, sp:ch.bodies[n].speed };
   });
   var placed = items.map(function(it){
@@ -1031,15 +1104,16 @@ function drawNatal(ch){
 
 function chartAspects(ch){
   var out = [];
-  for (var i = 0; i < BODY_ORDER.length; i++){
-    for (var j = i + 1; j < BODY_ORDER.length; j++){
-      if (BODY_ORDER[i] === "NorthNode" || BODY_ORDER[j] === "NorthNode") continue;
-      var sep = Math.abs(ch.bodies[BODY_ORDER[i]].lon - ch.bodies[BODY_ORDER[j]].lon) % 360;
+  var names = bodiesIn(ch);
+  for (var i = 0; i < names.length; i++){
+    for (var j = i + 1; j < names.length; j++){
+      if (names[i] === "NorthNode" || names[j] === "NorthNode") continue;
+      var sep = Math.abs(ch.bodies[names[i]].lon - ch.bodies[names[j]].lon) % 360;
       if (sep > 180) sep = 360 - sep;
       for (var k = 0; k < ASPECT_LIST.length; k++){
         var A = ASPECT_LIST[k], o = Math.abs(sep - A.deg);
         if (o <= (A.deg % 90 === 0 || A.deg === 120 || A.deg === 60 ? A.orb : A.orb)){
-          out.push({ a:BODY_ORDER[i], b:BODY_ORDER[j], asp:A, orb:o, sep:sep });
+          out.push({ a:names[i], b:names[j], asp:A, orb:o, sep:sep });
           break;
         }
       }
@@ -1078,7 +1152,7 @@ function bodyLabel(n){ return n === "NorthNode" ? "North Node" : n; }
 function detectPatterns(ch){
   var asps = chartAspects(ch);
   var map = aspectMap(asps);
-  var bodies = BODY_ORDER.filter(function(n){ return n !== "NorthNode"; });
+  var bodies = bodiesIn(ch).filter(function(n){ return n !== "NorthNode"; });
   var found = [];
   var O = PATTERN_ORB.major;
 
@@ -1592,7 +1666,7 @@ function linkBody(name){
 }
 
 function renderChartList(ch){
-  $("#chartList").innerHTML = BODY_ORDER.map(function(n){
+  $("#chartList").innerHTML = bodiesIn(ch).map(function(n){
     var lon = ch.bodies[n].lon, s = signOf(lon), hn = houseOf(ch, lon);
     var noTime = !!(ch.meta && ch.meta.unknownTime);
     var col = n === "NorthNode" ? "#c4caf0" : (BMAP[BODY_ID[n]] || {}).color || "#fff";

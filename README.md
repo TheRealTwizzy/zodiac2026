@@ -157,7 +157,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**189 checks.** The suite drives the real page in a DOM and tests behaviour,
+**196 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
@@ -199,7 +199,14 @@ theme is a variable swap rather than a second stylesheet.
 - Without a birth time the Ascendant, the houses and the four angles are
   withheld rather than computed from a guessed noon.
 - Inside 1900–2100 expect agreement with DE421 to better than 20 arcseconds.
-  The form accepts 1600–2200; outside the core range expect arcminutes.
+  The form accepts 1600–2200; outside the core range expect arcminutes for the
+  Sun, Moon and planets through Neptune.
+- **Pluto is the exception, and is withheld outside 1899–2050.** Its series is
+  fitted over those years and its secular terms are degrees rather than
+  arcseconds, so beyond them it does not drift — it diverges, by most of a
+  zodiac at 2100. Rather than print a confident wrong position, together with
+  the retrograde and the aspects and patterns that would be built on it, the
+  chart leaves Pluto out and says why.
 
 The **How to Read This** section in the app spells all of this out, along with
 which statements are facts and which are conventions of the tradition.

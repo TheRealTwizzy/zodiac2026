@@ -787,13 +787,23 @@ setTimeout(() => {
 
     section("time warnings");
     check("DST fall-back reads as ambiguous", () =>
-      window.dstAnomaly(2023, 10, 29, 1, 30, "Europe/London") === "ambiguous");
+      window.dstAnomaly(2023, 10, 29, 1, 30, "Europe/London").kind === "ambiguous");
     check("DST spring-forward reads as skipped", () =>
-      window.dstAnomaly(2023, 3, 26, 1, 30, "Europe/London") === "skipped");
+      window.dstAnomaly(2023, 3, 26, 1, 30, "Europe/London").kind === "skipped");
     check("an ordinary date reads clean", () =>
       window.dstAnomaly(2023, 6, 15, 12, 0, "Europe/London") === null);
     check("US transition also detected", () =>
-      window.dstAnomaly(2023, 11, 5, 1, 30, "America/New_York") === "ambiguous");
+      window.dstAnomaly(2023, 11, 5, 1, 30, "America/New_York").kind === "ambiguous");
+    // Which of the two instants was used depends on the sign of the offset, and
+    // the notice has to say the one that actually happened. The Americas land on
+    // the earlier occurrence, Europe on the later.
+    check("the ambiguous-hour notice reports the instant actually used", () => {
+      const us = window.dstAnomaly(2023, 11, 5, 1, 30, "America/New_York");
+      const uk = window.dstAnomaly(2023, 10, 29, 1, 30, "Europe/London");
+      if (us.first !== true) throw new Error("New York should resolve to the earlier");
+      if (uk.first !== false) throw new Error("London should resolve to the later");
+      return true;
+    });
     check("pre-1970 raises a warning", () => {
       setForm("1955-06-01", "03:00", false);
       const w = window.computeChart().meta.warnings;
@@ -944,6 +954,48 @@ setTimeout(() => {
       return true;
     });
 
+    // Pluto's series is fitted over 1899-2050 and diverges by hundreds of
+    // degrees outside it. Withheld rather than printed wrong.
+    check("Pluto is withheld outside the years its series was fitted over", () => {
+      const A = window.Astro;
+      for (const y of [1850, 1898, 2051, 2100]){
+        const c = A.chart(A.julianDay(y, 1, 1, 12), 51.5, -0.13, { houseSystem: "whole" });
+        if (c.bodies.Pluto) throw new Error(y + " still reported Pluto");
+        if ((c.withheld || []).indexOf("Pluto") < 0) throw new Error(y + " did not record it");
+      }
+      for (const y of [1899, 1990, 2050]){
+        const c = A.chart(A.julianDay(y, 1, 1, 12), 51.5, -0.13, { houseSystem: "whole" });
+        if (!c.bodies.Pluto) throw new Error(y + " should have Pluto");
+      }
+      return true;
+    });
+    check("a chart with a withheld body still renders, aspects and all", () => {
+      const before = errors.length;
+      window.chosenCity = { name: "London", region: "England", country: "United Kingdom",
+                            lat: 51.51, lon: -0.13, tz: "Europe/London" };
+      setForm("2100-06-15", "12:00", false);
+      const ch = window.computeChart();
+      if (!ch) throw new Error("no chart");
+      window.renderChartOut(ch);
+      if (errors.length !== before) throw new Error(errors.slice(before).join(" | "));
+      if (/Pluto/.test(document.getElementById("chartList").textContent))
+        throw new Error("Pluto listed for a date it is withheld on");
+      if (!/Pluto is not shown/.test(document.getElementById("chartOut").textContent))
+        throw new Error("no notice explaining why");
+      return true;
+    });
+    check("Whole Sign houses still begin on sign boundaries in sidereal", () => {
+      window.chosenCity = { name: "London", region: "England", country: "United Kingdom",
+                            lat: 51.51, lon: -0.13, tz: "Europe/London" };
+      setForm("1990-06-15", "12:00", false);
+      document.getElementById("cHouse").value = "whole";
+      const sid = window.toSidereal(window.computeChart());
+      const off = sid.houses.cusps.map(c => Math.abs(((c % 30) + 30) % 30));
+      const worst = Math.max(...off.map(o => Math.min(o, 30 - o)));
+      if (worst > 0.001) throw new Error("cusps sit " + worst.toFixed(2) + " deg inside a sign");
+      return true;
+    });
+
     section("shareable chart urls");
     check("a chart round-trips through its share sub", () => {
       setForm("1969-07-20", "20:17", false);
@@ -1014,6 +1066,29 @@ setTimeout(() => {
       if (sub.split("|")[6].split(",").length !== 3) throw new Error(sub);
       if (!window.applyChartSub(sub)) throw new Error("refused");
       return window.chosenCity.country === "United States";
+    });
+    // A share link is untrusted input; the web path already validates all three
+    // of these, so the link path must too.
+    check("a share link with an unusable time zone is refused", () => {
+      const bad = "1990-06-15|1200|51.51|-0.13|Europe/Lundon|whole|London,United Kingdom";
+      if (window.applyChartSub(bad) !== false) throw new Error("accepted a bad zone");
+      return true;
+    });
+    check("a share link with impossible coordinates is refused, not thrown on", () => {
+      const before = errors.length;
+      for (const sub of ["1990-06-15|1200|Infinity|-0.13|Europe/London|whole|X,Y",
+                         "1990-06-15|1200|51.51|999|Europe/London|whole|X,Y",
+                         "1990-06-15|1200|91|0|Europe/London|whole|X,Y"])
+        if (window.applyChartSub(sub) !== false) throw new Error("accepted " + sub);
+      if (errors.length !== before) throw new Error("threw: " + errors.slice(before).join(" | "));
+      return true;
+    });
+    check("an unresolvable zone never silently charts in UTC", () => {
+      if (window.tzOffsetMin("Mars/Olympus", Date.now()) !== null)
+        throw new Error("returned an offset for a zone that does not exist");
+      if (window.validTz("Mars/Olympus") !== false) throw new Error("validTz said yes");
+      if (window.validTz("Europe/London") !== true) throw new Error("validTz said no");
+      return true;
     });
     check("malformed subs are rejected, not crashed on", () =>
       window.applyChartSub("garbage") === false &&
