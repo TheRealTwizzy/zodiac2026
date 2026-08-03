@@ -300,27 +300,27 @@
         <div class="field">
           <label for="cTime">Time of day</label>
           <input type="time" id="cTime" value="12:00" required>
-          <div class="hint">Local clock time at the place below</div>
+          <div class="hint">Local clock time where you were born</div>
           <label class="checkline" for="cNoTime">
             <input type="checkbox" id="cNoTime">
             <span>I don’t know the birth time</span>
           </label>
         </div>
         <div class="field" style="flex:2 1 260px">
-          <!-- for= is re-pointed by syncPlaceMode(): whichever of the two
-               controls is live is the one this labels. -->
-          <label for="cPlace" id="cPlaceLabel">Place</label>
+          <!-- A time zone is the default: it fixes every planet exactly, and
+               it is far less to ask for. The city search is one click away for
+               anyone who wants the Ascendant and the houses, and it is what
+               pulls in data/cities.js — so most visitors never download it.
+               for= is re-pointed by syncPlaceMode() to whichever control is
+               live; labelling a hidden one labels nothing anyone can reach. -->
+          <label for="cZone" id="cPlaceLabel">Time zone</label>
           <input type="text" id="cPlace" placeholder="Start typing a city…" role="combobox"
-                 aria-expanded="false" aria-controls="cPlaceList" aria-autocomplete="list">
+                 aria-expanded="false" aria-controls="cPlaceList" aria-autocomplete="list"
+                 hidden disabled>
           <div class="ac-list" id="cPlaceList" role="listbox"></div>
-          <!-- Filled by buildZoneSelect() the first time it is needed; there are
-               ~420 zones and nobody who names a city ever pays for them. -->
-          <select id="cZone" aria-label="Time zone of birth" hidden disabled></select>
+          <select id="cZone" aria-label="Time zone of birth"></select>
           <div class="hint" id="cPlaceHint" role="status" aria-live="polite">Time zone and daylight saving are handled automatically</div>
-          <label class="checkline" for="cNoPlace">
-            <input type="checkbox" id="cNoPlace">
-            <span>Give a time zone instead of a place</span>
-          </label>
+          <button type="button" class="swaplink" id="cPlaceSwap" aria-pressed="false"></button>
         </div>
       </div>
       <div class="frow">

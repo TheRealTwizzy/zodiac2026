@@ -69,11 +69,13 @@ function localToUTCms(y, mo, d, h, mi, tz){
 }
 
 /* ------------------------------------------------------------ place data - *
-   The 50,000-place table is ~2 MB and only the Chart section needs it, so it
-   lives in data/cities.js and is pulled in the first time someone opens this
-   page. A classic <script> tag rather than fetch(), so the site still works
-   when the repo is opened straight off disk with file:// — fetch would be
-   blocked by CORS there, a script tag is not.                                */
+   The 50,000-place table is ~2 MB and only the city search needs it, so it
+   lives in data/cities.js and is pulled in the first time someone opens that
+   search — not when the Chart page opens. The default place is a time zone,
+   which needs no data at all, so most visitors never fetch this. A classic
+   <script> tag rather than fetch(), so the site still works when the repo is
+   opened straight off disk with file:// — fetch would be blocked by CORS
+   there, a script tag is not.                                                */
 
 var CITIES_SRC = "data/cities.js";
 var CITIES_WANT = 2;          /* the schema version this file knows how to read */
@@ -791,14 +793,23 @@ function setZonePlace(){
   showZoneChoice(z);
 }
 
+/* "zone" or "city". Zone is the default, and the reason is not only that it is
+   less to type: it is also the answer that needs no data. A visitor who never
+   opens the city search never downloads the 2 MB place table at all. */
+var placeMode = "zone";
+function inZoneMode(){ return placeMode === "zone"; }
+
+var SWAP_TO_CITY = "I know my birthplace — show my Ascendant";
+var SWAP_TO_ZONE = "Use a time zone instead";
+
 /* Show whichever control the current mode calls for. opts.keepCity is for the
    callers that have already decided what chosenCity is — a restored form, a
    share link — and only want the form to match it. */
 function syncPlaceMode(opts){
   opts = opts || {};
-  var box = $("#cNoPlace"), inp = $("#cPlace"), list = $("#cPlaceList"), sel = $("#cZone");
-  if (!box || !inp || !sel) return;
-  var on = box.checked;
+  var inp = $("#cPlace"), list = $("#cPlaceList"), sel = $("#cZone"), swap = $("#cPlaceSwap");
+  if (!inp || !sel) return;
+  var on = inZoneMode();
 
   if (on && chosenCity && !zoneOnly(chosenCity)) lastTownCity = chosenCity;
   if (on) buildZoneSelect();
@@ -813,33 +824,54 @@ function syncPlaceMode(opts){
     lab.setAttribute("for", on ? "cZone" : "cPlace");
     lab.textContent = on ? "Time zone" : "Place";
   }
+  if (swap){
+    swap.textContent = on ? SWAP_TO_CITY : SWAP_TO_ZONE;
+    swap.setAttribute("aria-pressed", on ? "false" : "true");
+  }
   if (list) list.classList.remove("on");
   inp.setAttribute("aria-expanded", "false");
   inp.removeAttribute("aria-activedescendant");
+
+  /* Asking for the city search is what asks for the place table. Everything
+     else on this page — including a restored or shared town, which carries its
+     own coordinates — works without it. */
+  if (!on) wantCities();
 
   if (opts.keepCity) return;
   if (on){ setZonePlace(); return; }
 
   /* Coming back to a place: a zone-only choice is not one any more. Restore
      the last town rather than making someone retype a birthplace to undo a
-     checkbox. */
+     click. */
   if (zoneOnly(chosenCity)) chosenCity = lastTownCity;
   if (chosenCity){
     inp.value = placeLabel(chosenCity);
     showPlaceCoords(chosenCity.lat, chosenCity.lon, chosenCity.tz);
   } else {
     inp.value = "";
-    setPlaceStatus(PLACE_HINT);
+    if (citiesLoaded()) setPlaceStatus(PLACE_HINT);
   }
+}
+
+/* Pull in the place table, and index it, because someone is about to search
+   it. Idempotent — ensureCities() memoises, and the index build is a no-op
+   once it is done. */
+function wantCities(){
+  if (citiesLoaded()){ prebuildCityIndex(); return; }
+  setPlaceStatus("Loading places…");
+  ensureCities().then(function(){
+    if (!chosenCity || zoneOnly(chosenCity)) setPlaceStatus(PLACE_HINT);
+    prebuildCityIndex();
+  }, placeLoadFailed);
 }
 
 /* Put whatever chosenCity already is into the form. One function, so the
    restore path, the share-link path and the preset path cannot drift apart. */
 function showChosenPlace(){
   if (!chosenCity) return;
-  var box = $("#cNoPlace"), sel = $("#cZone"), inp = $("#cPlace");
+  var sel = $("#cZone"), inp = $("#cPlace");
   var zone = zoneOnly(chosenCity);
-  if (box) box.checked = zone;
+  placeMode = zone ? "zone" : "city";
   syncPlaceMode({ keepCity: true });
   if (zone){
     if (sel){
@@ -862,9 +894,16 @@ function showChosenPlace(){
 }
 
 function wireZone(){
-  var box = $("#cNoPlace"), sel = $("#cZone");
-  if (!box || !sel) return;
-  box.addEventListener("change", function(){ syncPlaceMode(); });
+  var swap = $("#cPlaceSwap"), sel = $("#cZone");
+  if (!swap || !sel) return;
+  swap.addEventListener("click", function(){
+    placeMode = inZoneMode() ? "city" : "zone";
+    syncPlaceMode();
+    /* Move focus to whatever just appeared, or the click leaves it on a button
+       whose label has changed under it. */
+    var next = inZoneMode() ? sel : $("#cPlace");
+    if (next && next.focus) try { next.focus(); } catch (e){}
+  });
   sel.addEventListener("change", function(){ setZonePlace(); });
   syncPlaceMode({ keepCity: !!chosenCity });
 }
@@ -1252,12 +1291,11 @@ function computeChart(){
   }
   $("#cDateHint").textContent = "1600 to 2200 — accuracy is best near the present";
   if (!chosenCity){
-    var zoneMode = !!($("#cNoPlace") && $("#cNoPlace").checked);
+    var zoneMode = inZoneMode();
     $("#cPlaceHint").innerHTML = '<span style="color:var(--warn-text)">' + (zoneMode
       ? "Choose a time zone — the planets are computed from the instant, and that " +
         "needs one."
-      : "Pick a city from the list, or tick the box below to give a time zone " +
-        "instead.") + "</span>";
+      : "Pick a city from the list, or use a time zone instead.") + "</span>";
     (zoneMode ? $("#cZone") : $("#cPlace")).focus();
     return null;
   }
@@ -2197,16 +2235,11 @@ function renderChartPage(){
     }
   });
 
-  /* start pulling the place table as soon as this page is opened — by the
-     time anyone has typed two characters it is normally already here. Don't
-     stomp on the restored city's coordinate line while it loads. */
-  if (!chosenCity) setPlaceStatus("Loading places…");
-  ensureCities().then(function(){
-    if (!chosenCity) setPlaceStatus(PLACE_HINT);
-    /* And index it while the page is idle, rather than letting the first
-       keystroke pay for it. */
-    prebuildCityIndex();
-  }, placeLoadFailed);
+  /* The place table is NOT pulled in here any more. A time zone is the default
+     answer and needs no data at all, so opening this page costs nothing beyond
+     the shell — the 2 MB arrives only if someone asks for the city search, via
+     wantCities() in syncPlaceMode(). A restored or shared town does not need
+     it either: those carry their own coordinates. */
 
   $("#chartForm").addEventListener("submit", function(e){
     e.preventDefault();
@@ -2230,6 +2263,10 @@ function renderChartPage(){
   }
 
   $("#cNow").addEventListener("click", function(){
+    /* Only the no-place-chosen branch of skyNow reads CITIES, and in zone mode
+       there is always a place chosen — so don't drag 2 MB in for a button that
+       will not touch it. */
+    if (chosenCity) return skyNow();
     ensureCities().then(skyNow, placeLoadFailed);
   });
 

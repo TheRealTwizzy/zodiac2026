@@ -15,21 +15,23 @@
    a returning visitor could pair a new js/11-chart.js with a cached
    data/cities.js from an older schema. js/11-chart.js checks CITIES_FORMAT for
    the same reason. */
-const CACHE = "cosmic-atlas-v5";
+const CACHE = "cosmic-atlas-v6";
 
 /* Everything the site needs to start and run — EXCEPT data/cities.js.
  *
- * That file is 2 MB, and only the Chart section wants it. Precaching it meant
+ * That file is 2 MB, and only the city search wants it. Precaching it meant
  * every visitor downloaded it on the very first page load, including the many
- * who never open Chart at all, which is the opposite of the lazy loading the
- * page itself goes to some trouble to arrange. It is left out here and picked
- * up by the runtime cache below the first time Chart actually asks for it —
- * after which it is available offline like anything else.
+ * who never search for a city at all, which is the opposite of the lazy
+ * loading the page itself goes to some trouble to arrange. It is left out here
+ * and picked up by the runtime cache below the first time the city search
+ * actually asks for it — after which it is available offline like anything
+ * else.
  *
- * The honest cost: install no longer guarantees the chart works offline. A
- * visitor who installs the app and goes offline without ever opening Chart
- * will find the place list missing, and gets the existing recoverable message
- * rather than a dead form. One visit to Chart, online, fixes that for good.
+ * The honest cost: install no longer guarantees the city search works offline.
+ * A visitor who installs the app and goes offline without ever opening it will
+ * find the place list missing, and gets the existing recoverable message
+ * rather than a dead form. Charting from a time zone — the default — never
+ * needed the file and keeps working regardless.
  */
 const PRECACHE = [
   "./",
@@ -95,8 +97,8 @@ self.addEventListener("fetch", (event) => {
       const fresh = fetch(req)
         .then((res) => {
           // This is also what puts data/cities.js in the cache: it is not
-          // precached, so the first Chart visit is what makes it available
-          // offline from then on.
+          // precached, so the first use of the city search is what makes it
+          // available offline from then on.
           if (res && res.status === 200 && res.type === "basic") {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
