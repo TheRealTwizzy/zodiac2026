@@ -2,7 +2,7 @@
 
 Everything in `cosmic-atlas-qol-master.md`, plus the mobile-app work and the
 file split, plus the place-data work in batch five. Run `npm test` to verify —
-**209 checks**.
+**210 checks**.
 
 ---
 
@@ -156,7 +156,7 @@ npm test
 JSDOM_PATH=/path/to/node_modules/jsdom node smoke.js
 ```
 
-209 checks across 30 sections. Where a claim can be verified independently it
+210 checks across 30 sections. Where a claim can be verified independently it
 is: aspect patterns are re-checked against raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
 against the documented April 2024 Mercury retrograde, the ayanamsa against the

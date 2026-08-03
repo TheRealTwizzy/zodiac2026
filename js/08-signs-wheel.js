@@ -858,7 +858,14 @@ function toggleSelect(i){
   syncAll();
 }
 function selectPair(a, b){
-  state.matrix = false; state.selection = [a, b]; syncAll();
+  state.matrix = false;
+  /* A sign compared with itself is not a comparison — every score would be a
+     tautology (same element, same modality, 0 degrees apart) and the readout
+     would describe a relationship that cannot exist. Deep links and any future
+     caller land here, so the guard belongs in the one funnel. Show the single
+     sign instead, which is what someone asking for it actually wants. */
+  if (a === b || !(b >= 0)) { state.selection = [a]; syncAll(); return; }
+  state.selection = [a, b]; syncAll();
   if (typeof writeHash === "function" && typeof current !== "undefined" && current === "wheel")
     writeHash("#/wheel/" + SIGNS[a].id + "+" + SIGNS[b].id, true);
 }

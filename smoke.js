@@ -1542,7 +1542,16 @@ setTimeout(() => {
       if (px("SIGNS[state.selection[1]].id") !== "libra") throw new Error("wrong second");
       return true;
     });
-    check("a bad pair is rejected", () =>
+    check("a sign is never compared against itself", () => {
+    window.selectPair(0, 0);
+    if (px("state.selection.length") !== 1)
+      throw new Error("selected " + px("state.selection.length") + " signs");
+    go("wheel");
+    window.applySub && window.applySub("aries+aries");
+    if (px("state.selection.length") > 1) throw new Error("deep link produced a self-pair");
+    return true;
+  });
+  check("a bad pair is rejected", () =>
       window.selectSignById("aries+notasign") === false);
 
     section("retrograde context");
