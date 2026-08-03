@@ -1551,6 +1551,26 @@ setTimeout(() => {
     if (px("state.selection.length") > 1) throw new Error("deep link produced a self-pair");
     return true;
   });
+  check("every glossary cross-reference resolves", () => {
+    const ids = new Set(px("GLOSSARY.map(function(g){ return g.id; })"));
+    const bad = [];
+    for (const e of px("GLOSSARY.map(function(g){ return {id:g.id, see:g.see||[]}; })"))
+      for (const r of e.see) if (!ids.has(r)) bad.push(e.id + " -> " + r);
+    if (bad.length) throw new Error(bad.join(", "));
+    if (ids.size < 95) throw new Error("only " + ids.size + " terms");
+    return true;
+  });
+  check("a marked quiz answer links to where the answer lives", () => {
+    const cats = px("QUIZ.map(function(q){ return q.cat; })");
+    const unmapped = [...new Set(cats)].filter(c => !px("QUIZ_SOURCE[" + JSON.stringify(c) + "]"));
+    if (unmapped.length) throw new Error("no source for: " + unmapped.join(", "));
+    const ids = new Set(px("PAGES.map(function(p){ return p.id; })"));
+    for (const c of new Set(cats)){
+      const target = px("QUIZ_SOURCE[" + JSON.stringify(c) + "].id");
+      if (!ids.has(target)) throw new Error(c + " points at a section that does not exist: " + target);
+    }
+    return true;
+  });
   check("a bad pair is rejected", () =>
       window.selectSignById("aries+notasign") === false);
 
