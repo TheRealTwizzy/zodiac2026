@@ -15,7 +15,7 @@
    a returning visitor could pair a new js/11-chart.js with a cached
    data/cities.js from an older schema. js/11-chart.js checks CITIES_FORMAT for
    the same reason. */
-const CACHE = "cosmic-atlas-v4";
+const CACHE = "cosmic-atlas-v5";
 
 /* Everything the site needs to start and run — EXCEPT data/cities.js.
  *
