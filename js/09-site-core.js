@@ -47,6 +47,12 @@ function load(key, fallback){
     return raw === null ? fallback : JSON.parse(raw);
   } catch (e){ return fallback; }
 }
+/* Removing is a third case rather than store(key, null): a stored null is a
+   value, and load() would hand it back instead of the caller's fallback. */
+function forget(key){
+  try { localStorage.removeItem(STORE_PREFIX + key); }
+  catch (e){ /* blocked or disabled — there was nothing stored to remove */ }
+}
 
 visited = load("visited", {});
 
@@ -705,7 +711,16 @@ var LIMITS = [
   { t:"No birth time",
     d:"The Ascendant moves a degree every four minutes and the houses move with it. " +
       "Without a time they are withheld entirely rather than computed from a guessed " +
-      "noon, because a plausible-looking wrong answer is worse than none." }
+      "noon, because a plausible-looking wrong answer is worse than none." },
+  { t:"What is kept on this device",
+    d:"Calculating a chart saves the date, the time and the birthplace in this " +
+      "browser, so the form is still filled in next time. It stays on this device " +
+      "and is sent nowhere — there is no account and no server to send it to. " +
+      "A “Forget my birth data” button sits under the chart form whenever there " +
+      "is something to erase, and it clears the address bar too, since copying a " +
+      "share link puts the chart there. Everything else kept is preference rather " +
+      "than personal: the theme, the quiz score, which sections you have opened, " +
+      "and whether you allowed the web place lookup." }
 ];
 
 var CHOICES = [

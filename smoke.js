@@ -486,9 +486,9 @@ setTimeout(() => {
     console.log("        (shell " + shell.toFixed(0) + " KB + css " + cssKb.toFixed(0) +
       " KB + js " + jsKb.toFixed(0) + " KB, plus " + dataKb.toFixed(0) +
       " KB loaded only for the chart)");
-    // The place table is lazy and precached, so it can afford to be large —
-    // but not unboundedly. Raising POP_MIN in tools/build-cities.js is the
-    // lever if this ever trips.
+    // The place table is loaded on demand and cached on first use, so it can
+    // afford to be large — but not unboundedly. Raising POP_MIN in
+    // tools/build-cities.js is the lever if this ever trips.
     if (dataKb > 3000) throw new Error(dataKb.toFixed(0) + " KB of place data");
     if (shell > 60) throw new Error("shell grew to " + shell.toFixed(0) + " KB");
     return true;
@@ -707,6 +707,134 @@ setTimeout(() => {
       const ms = Date.now() - t0;
       console.log("        (" + (qs.length * 15) + " queries in " + ms + " ms)");
       if (ms > 1500) throw new Error(ms + " ms");
+      return true;
+    });
+
+    // ---- the index is built ahead of the first keystroke -------------------
+    // ~130ms of work used to happen inside the first keypress. It now runs in
+    // slices while the page is idle, which is only safe if the sliced result is
+    // the same index the single pass produced — so check that, not just timing.
+    check("the index builds itself, deferred, with no query involved", () => {
+      px("CBUCKET = null; cityIndexAt = 0; prebuilding = false;");
+      if (px("cityIndexReady()") !== false) throw new Error("teardown failed");
+      // whenIdle() defers each slice. Run the deferrals inline so the test can
+      // stay synchronous — and count them, because doing the whole build inline
+      // is exactly the regression this guards against.
+      const realT = window.setTimeout, realI = window.requestIdleCallback;
+      let deferred = 0;
+      window.setTimeout = (fn) => { deferred++; fn(); return 0; };
+      window.requestIdleCallback = undefined;
+      try { px("prebuildCityIndex()"); }
+      finally { window.setTimeout = realT; window.requestIdleCallback = realI; }
+      if (deferred < 2) throw new Error("built inline rather than in slices");
+      if (px("cityIndexReady()") !== true)
+        throw new Error("stopped at " + px("cityIndexAt") + " of " + px("CITIES.length"));
+      console.log("        (" + deferred + " deferred slices)");
+      return true;
+    });
+    // The behaviour above is only worth anything if the page actually starts
+    // it. Nothing observable distinguishes "started at page open" from "built
+    // by the first query" once the suite has run a query of its own, so this
+    // one is checked at the source.
+    check("opening the chart page is what starts the build", () => {
+      const src = fs.readFileSync(path.join(__dirname, "js/11-chart.js"), "utf8");
+      const fn = src.slice(src.indexOf("function renderChartPage"));
+      if (!/ensureCities\(\)[\s\S]{0,400}?prebuildCityIndex\(\)/.test(fn))
+        throw new Error("renderChartPage no longer starts the prebuild");
+      // And a query must still finish it itself, or one that beats the idle
+      // work would search a half-built index.
+      const sc = src.slice(src.indexOf("function searchCities"));
+      if (!/buildCityIndex\(\)/.test(sc.slice(0, 900)))
+        throw new Error("searchCities no longer completes the index");
+      return true;
+    });
+    check("building in slices gives the identical index", () => {
+      const snap = px(`JSON.stringify([CNAME, CTEXT, CBUCKET, CCITY, NBUCKET])`);
+      // Tear it down and rebuild it the other way — one slice at a time.
+      px("CBUCKET = null; cityIndexAt = 0;");
+      px("while (!cityIndexReady()) buildCityIndexTo(cityIndexAt + CITY_SLICE);");
+      const sliced = px(`JSON.stringify([CNAME, CTEXT, CBUCKET, CCITY, NBUCKET])`);
+      if (snap !== sliced) throw new Error("sliced build differs from the single pass");
+      // And the whole-hog path must land in the same place.
+      px("CBUCKET = null; cityIndexAt = 0; buildCityIndex();");
+      if (px(`JSON.stringify([CNAME, CTEXT, CBUCKET, CCITY, NBUCKET])`) !== snap)
+        throw new Error("single pass differs from itself");
+      return true;
+    });
+    check("a slice is small enough to fit in a frame", () => {
+      if (px("CITY_SLICE") > 5000) throw new Error("CITY_SLICE = " + px("CITY_SLICE"));
+      return true;
+    });
+
+    // ---- the country branch is a lookup, not a scan ------------------------
+    // Typing a country's whole name used to walk all 49,564 records, and for
+    // the 130 countries with fewer than 40 places it walked every one.
+    check("every country's cities are indexed, ranked and capped", () => {
+      const bad = px(`(function(){
+        var seen = Object.create(null), i;
+        for (i = 0; i < CITIES.length; i++) seen[CITIES[i][1]] = true;
+        for (var k in seen){
+          var list = CCITY[k];
+          if (!list || !list.length) return "no CCITY for country " + k;
+          if (list.length > 40) return "country " + k + " kept " + list.length;
+          for (i = 1; i < list.length; i++){
+            if (list[i] <= list[i - 1]) return "country " + k + " out of order";
+            if (CITIES[list[i]][1] !== +k) return "country " + k + " has a stray record";
+          }
+        }
+        return "";
+      })()`);
+      if (bad) throw new Error(bad);
+      return true;
+    });
+    check("a country with few cities is as quick as one with many", () => {
+      const time = (q) => {
+        const t0 = Date.now();
+        for (let i = 0; i < 40; i++) window.searchCities(q);
+        return Math.max(1, Date.now() - t0);
+      };
+      // Warm both paths before measuring either.
+      time("monaco"); time("london");
+      const small = time("monaco"), word = time("london");
+      console.log("        (monaco " + small + " ms vs london " + word + " ms per 40)");
+      // It was 19x before the index; anything past 5x means the scan is back.
+      if (small > word * 5) throw new Error(small + " ms vs " + word + " ms");
+      return true;
+    });
+    check("naming a country still lists its cities, largest first", () => {
+      const r = window.searchCities("france");
+      if (!r.length) throw new Error("no results");
+      if (px("CITIES[" + r[0] + "][0]") !== "Paris")
+        throw new Error("france -> " + px("CITIES[" + r[0] + "][0]"));
+      const mc = window.searchCities("monaco");
+      if (!mc.length) throw new Error("no results for monaco");
+      return true;
+    });
+
+    // ---- narrowsPlace answers from a bucket, not a full scan ---------------
+    check("region and country matching is unchanged by the bucketing", () => {
+      const bad = px(`(function(){
+        function brute(t){
+          var i;
+          for (i = 1; i < AFOLD.length; i++) if (AFOLD[i].indexOf(t) === 0) return true;
+          for (i = 0; i < CFOLD.length; i++) if (CFOLD[i].indexOf(t) === 0) return true;
+          return false;
+        }
+        var probes = ["il", "ca", "ma", "dc", "united states", "france", "il ",
+                      "z", "a", "q", "zz", "qx", "eng", "bay", "new", "saint",
+                      "north", "s", "united", "u", "californ", "kingdom"];
+        for (var i = 0; i < 400; i++) probes.push(AFOLD[i + 1] || "");
+        for (var j = 0; j < CFOLD.length; j++){
+          probes.push(CFOLD[j], CFOLD[j].slice(0, 3), CFOLD[j] + "x");
+        }
+        for (var k = 0; k < probes.length; k++){
+          var t = probes[k];
+          if (!t) continue;
+          if (narrowsPlace(t) !== brute(t)) return JSON.stringify(t);
+        }
+        return "";
+      })()`);
+      if (bad) throw new Error("disagrees with a full scan on " + bad);
       return true;
     });
 
@@ -1237,6 +1365,104 @@ setTimeout(() => {
     check("share and print controls present", () =>
       !!document.getElementById("cShare") && !!document.getElementById("cPrint"));
     check("print stylesheet exists", () => /@media print/.test(cssSrc));
+
+    section("forget my birth data");
+    // A date of birth, a time of birth and a birthplace persist from the first
+    // calculation onwards. Remembering is the right default; having no way out
+    // of it is not.
+    {
+      const KEY = "cosmicatlas:chartInputs";
+      const boxEl = () => document.getElementById("cForget");
+      const clickForget = (what) => {
+        const b = boxEl().querySelector('[data-forget="' + what + '"]');
+        if (!b) throw new Error('no [data-forget="' + what + '"] — box is: ' + boxEl().innerHTML);
+        b.click();
+      };
+      const stored = () => window.localStorage.getItem(KEY);
+      const seed = () => {
+        setForm("1974-03-11", "07:45", false);
+        window._pickCityIdx(window.searchCities("springfield il")[0]);
+        window.renderChartOut(window.computeChart());
+        window.saveChartInputs();
+      };
+
+      check("nothing is offered when nothing has been stored", () => {
+        window.localStorage.removeItem(KEY);
+        window.drawForget("idle");
+        if (boxEl().innerHTML !== "") throw new Error("offered: " + boxEl().innerHTML);
+        if (boxEl().classList.contains("on")) throw new Error("box is visible");
+        return true;
+      });
+      check("calculating a chart puts the control on screen", () => {
+        seed();
+        if (!stored()) throw new Error("nothing was saved");
+        if (!boxEl().classList.contains("on")) throw new Error("box stayed hidden");
+        if (!boxEl().querySelector('[data-forget="ask"]')) throw new Error(boxEl().innerHTML);
+        return true;
+      });
+      check("it asks before erasing anything", () => {
+        clickForget("ask");
+        if (!boxEl().querySelector('[data-forget="do"]')) throw new Error("no confirm");
+        if (!stored()) throw new Error("erased before being confirmed");
+        return true;
+      });
+      check("keeping them changes nothing", () => {
+        clickForget("cancel");
+        if (!stored()) throw new Error("erased anyway");
+        if (!boxEl().querySelector('[data-forget="ask"]')) throw new Error("did not go back");
+        return true;
+      });
+      check("forgetting clears the store, the form and the chart", () => {
+        seed();
+        clickForget("ask");
+        clickForget("do");
+        if (stored() !== null) throw new Error("still stored: " + stored());
+        if (window.chosenCity) throw new Error("chosenCity survived");
+        if (window.lastChart) throw new Error("lastChart survived");
+        if (document.getElementById("cPlace").value !== "")
+          throw new Error("place box still reads " + document.getElementById("cPlace").value);
+        if (document.getElementById("chartOut").innerHTML !== "")
+          throw new Error("the chart is still on screen");
+        if (!/Forgotten/.test(boxEl().textContent)) throw new Error(boxEl().textContent);
+        return true;
+      });
+      // Copying a share link writes the whole chart into the address bar, so
+      // clearing storage alone would leave the birth data in plain sight.
+      check("forgetting clears the chart out of the address bar", () => {
+        seed();
+        window.writeHash("#/chart/" + encodeURIComponent(window.chartToSub(window.computeChart())), true);
+        if (!/%7C/.test(window.location.hash)) throw new Error("test setup: " + window.location.hash);
+        clickForget("ask");
+        clickForget("do");
+        if (/\d{4}-\d{2}-\d{2}/.test(decodeURIComponent(window.location.hash)))
+          throw new Error("birth date left in the url: " + window.location.hash);
+        return true;
+      });
+      check("a blocked localStorage cannot break the control", () => {
+        const real = window.localStorage.removeItem;
+        window.localStorage.removeItem = () => { throw new Error("SecurityError"); };
+        try {
+          seed();
+          clickForget("ask");
+          clickForget("do");     // must not throw out of the click handler
+        } finally {
+          window.localStorage.removeItem = real;
+        }
+        return true;
+      });
+      check("the control reappears the next time a chart is calculated", () => {
+        window.localStorage.removeItem(KEY);
+        window.drawForget("idle");
+        seed();
+        if (!boxEl().querySelector('[data-forget="ask"]')) throw new Error(boxEl().innerHTML);
+        return true;
+      });
+      // Leave the page as the rest of the suite expects to find it.
+      window.localStorage.removeItem(KEY);
+      window.drawForget("idle");
+      setForm("1990-06-15", "12:00", false);
+      window._pickCityIdx(window.searchCities("london")[0]);
+    }
 
     section("cross-links in generated output");
     check("positions readout links signs and houses", () => {
