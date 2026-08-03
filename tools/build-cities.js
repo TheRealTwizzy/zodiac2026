@@ -87,6 +87,8 @@ function fold(s){
     .replace(/[þÞ]/g, "th")    /* þ Þ */
     .replace(/[ðÐ]/g, "d")     /* ð Ð */
     .replace(/ß/g, "ss")            /* ß */
+    .replace(/[\u0126\u0127]/g, "h")   /* Maltese H-bar */
+    .replace(/[\u018f\u0259]/g, "e")   /* Azerbaijani schwa */
     /* Typographic apostrophes to the one on the keyboard, so N'Djamena and
        Ra's Bayrut are reachable by someone typing them the ordinary way. */
     .replace(/[\u2018\u2019\u02bc\u00b4\u0060]/g, "'")

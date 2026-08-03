@@ -576,6 +576,50 @@ setTimeout(() => {
         if (!window.searchCities(q).length) throw new Error("no match for " + q);
       return true;
     });
+    // Eight records are written in Cyrillic with no Latin alias. Tokenizing on
+    // [a-z0-9] emptied their index entries entirely, so they shipped in the
+    // table and could not be selected in any script, their own included.
+    check("names in a non-Latin script are findable in that script", () => {
+      const unreachable = px(`(function(){
+        var out = [];
+        for (var i = 0; i < CITIES.length; i++){
+          if (!/[^\\u0000-\\u007f]/.test(CITIES[i][6] || CITIES[i][0])) continue;
+          if (CITIES[i][6]) continue;              // has a Latin alias, fine
+          if (searchCities(CITIES[i][0]).indexOf(i) < 0) out.push(CITIES[i][0]);
+        }
+        return out.join(", ");
+      })()`);
+      if (unreachable) throw new Error("cannot be found: " + unreachable);
+      return true;
+    });
+    check("every record can be found by its own name", () => {
+      // A sample rather than all 50,000 — enough to catch a tokenizer that
+      // drops a whole class of name, cheap enough to run every time.
+      const missed = px(`(function(){
+        var out = [];
+        for (var i = 0; i < CITIES.length; i += 149){
+          if (searchCities(CITIES[i][0]).indexOf(i) < 0) out.push(CITIES[i][0]);
+        }
+        return out.slice(0, 5).join(", ");
+      })()`);
+      if (missed) throw new Error("not found by name: " + missed);
+      return true;
+    });
+    // A rejected load leaves the old globals defined, so the schema check has
+    // to sit in the predicate everything asks — not only on the load path.
+    check("an incompatible place table is refused on every path", () => {
+      const real = px("CITIES_FORMAT");
+      px("CITIES_FORMAT = 1");
+      try {
+        if (px("citiesLoaded()") !== false) throw new Error("still reported as loaded");
+        if (window.searchCities("london").length !== 0)
+          throw new Error("searched an incompatible table");
+      } finally {
+        px("CITIES_FORMAT = " + real);
+      }
+      if (!window.searchCities("london").length) throw new Error("did not recover");
+      return true;
+    });
     // A regression here would mean going back to scanning 50,000 rows per
     // keystroke. Generous enough not to flake on a cold CI runner.
     check("queries stay fast at fifty thousand records", () => {
@@ -1564,6 +1608,22 @@ setTimeout(() => {
         if (rowsOf("ask").length) throw new Error("still offered");
         return t.calls.length === 0;
       });
+      // The README promises this is reversible. It is only true if the way
+      // back survives a reload — a control rendered once, at the moment of
+      // choosing, leaves the setting permanent in practice.
+      check("'never' still offers a way back on a later visit", () => {
+        const b = hint().querySelector('[data-web="reset"]');
+        if (!b) throw new Error("no reset control: " + hint().textContent);
+        return true;
+      });
+      hint().querySelector('[data-web="reset"]').click();
+      await sleep(50);
+      check("turning it back on restores the offer", () => {
+        if (window._webConsent() !== "") throw new Error("consent still " + window._webConsent());
+        return window.webLookupAvailable() === true;
+      });
+      await type(MISS);
+      check("and the web row comes back", () => rowsOf("ask").length === 1);
 
       // Leave the page as we found it.
       window.store("placeWebLookup", "");
