@@ -390,6 +390,11 @@ function cuspSemiArc(ramc, eps, lat, f, nocturnal){
 var BODIES = ["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn",
               "Uranus","Neptune","Pluto"];
 
+/* The years PERT.Pluto was fitted over — see the comment above PERT. Every
+   other body stays inside half a degree across the whole 1600-2200 form
+   range; Pluto does not, so it is the only one with a window. */
+var PLUTO_FROM = 1899, PLUTO_TO = 2050;
+
 /* utcJD: Julian Day in UT.  lat/lon in degrees, east positive. */
 function chart(utcJD, lat, lon, opts){
   opts = opts || {};
@@ -405,8 +410,21 @@ function chart(utcJD, lat, lon, opts){
   out.bodies.Sun = { lon: sunApparent(T), speed: dailySpeed("Sun", T) };
   out.bodies.Moon = { lon: norm360(moonLongitude(T) + nut.dpsi),
                       speed: dailySpeed("Moon", T) };
+  /* Pluto's perturbation series is the one fit here that does not degrade
+     gracefully. Its secular terms are degrees, not arcseconds, so outside the
+     window it was fitted over the correction runs away: about 0.00° across
+     1900-2050, then 580° at 2100 and 4745° at 1600. That does not produce a
+     slightly-off Pluto, it produces a confident one in the wrong sign, with a
+     fabricated retrograde and every aspect and pattern built on top of it.
+     Withhold it instead — the same choice the chart already makes for the
+     Ascendant when there is no birth time. */
+  out.withheld = [];
   for (var i = 2; i < BODIES.length; i++){
     var n = BODIES[i];
+    if (n === "Pluto" && (y.year < PLUTO_FROM || y.year > PLUTO_TO)){
+      out.withheld.push(n);
+      continue;
+    }
     var p = planetLongitude(n, T);
     out.bodies[n] = { lon: p.lon, lat: p.lat, dist: p.dist, speed: dailySpeed(n, T) };
   }
