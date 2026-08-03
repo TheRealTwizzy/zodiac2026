@@ -41,8 +41,16 @@ assignment, and storage failures are swallowed — so nothing breaks either way.
 
 It's a PWA. Over http you'll get an install prompt; once installed it runs
 standalone with no browser chrome and works with no network at all — the
-service worker precaches every asset. `manifest.json` also registers shortcuts
-straight to the chart, the wheel and the quiz.
+service worker precaches the whole site on install, with one deliberate
+exception: `data/cities.js`. At 2 MB it is most of the download, and only the
+Chart section needs it, so precaching it would have made every visitor pay for
+it on first load — including everyone who never opens Chart. It joins the
+cache the first time Chart actually asks for it, and is available offline from
+then on. The cost is stated plainly: install alone does not guarantee the
+chart works offline; one online visit to Chart does.
+
+`manifest.json` also registers shortcuts straight to the chart, the wheel and
+the quiz.
 
 ## Layout
 
@@ -168,7 +176,7 @@ $env:JSDOM_PATH = "C:\path\to\node_modules\jsdom"
 node smoke.js
 ```
 
-**212 checks.** The suite drives the real page in a DOM and tests behaviour,
+**214 checks.** The suite drives the real page in a DOM and tests behaviour,
 not just that files parse. Where a claim can be checked independently it is:
 aspect patterns are re-verified against the raw angular separations, sign
 boundaries against the 2024 equinoxes and solstices, the retrograde window
