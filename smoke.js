@@ -230,6 +230,28 @@ setTimeout(() => {
       if (escapes(p) !== want) throw new Error(p + " -> " + escapes(p));
     return true;
   });
+  // The 2 MB place table must not be part of install: only the Chart section
+  // needs it, and precaching it made every visitor download it on first load.
+  // The runtime handler is what puts it in the cache, on first real use.
+  check("the place table is cached on use, not on install", () => {
+    const sw = fs.readFileSync(path.join(__dirname, "sw.js"), "utf8");
+    const list = sw.slice(sw.indexOf("const PRECACHE = ["),
+                          sw.indexOf("];", sw.indexOf("const PRECACHE = [")));
+    if (/cities\.js/.test(list)) throw new Error("cities.js is still precached on install");
+    if (!/caches\.open\(CACHE\)[\s\S]{0,40}\.put\(/.test(sw))
+      throw new Error("nothing would ever cache it at runtime");
+    // and the rest of the site must still be precached
+    for (const need of ["index.html", "css/atlas.css", "js/01-astro.js", "js/11-chart.js",
+                        "js/10b-place-web.js", "manifest.json"])
+      if (!list.includes(need)) throw new Error("no longer precached: " + need);
+    return true;
+  });
+  check("the docs describe the precache that actually ships", () => {
+    const readme = fs.readFileSync(path.join(__dirname, "README.md"), "utf8");
+    if (/precaches every asset/.test(readme))
+      throw new Error("README still claims every asset is precached");
+    return true;
+  });
   check("serve.js has no dependencies", () => {
     const src = fs.readFileSync(path.join(__dirname, "serve.js"), "utf8");
     const reqs = [...src.matchAll(/require\("([^"]+)"\)/g)].map(m => m[1]);
