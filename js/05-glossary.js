@@ -604,5 +604,205 @@ const GLOSSARY = [
     full: "Astronomically, the zodiac is a belt about 8-9° either side of the ecliptic within which the Sun, Moon and planets are always found. Astrologically it is that belt divided into twelve equal 30° signs. The name comes from a Greek phrase meaning circle of little animals. The thirteenth constellation the Sun crosses, Ophiuchus, is real but was never part of the twelve-fold scheme, which is a division of degrees rather than a list of constellations.",
     cat: "basic",
     see: ["ecliptic", "tropical-zodiac", "sidereal-zodiac", "degree", "element"]
+  },
+
+  /* ---------- terms this site's own machinery uses ---------- */
+  {
+    id: "ayanamsa",
+    term: "Ayanamsa",
+    short: "The gap between the tropical and sidereal zodiacs, currently about 24°.",
+    full: "The angular difference between the tropical zodiac, measured from the March equinox, and the sidereal zodiac, measured from the stars. Precession pulls the two apart by about 50 arcseconds a year, so the gap has grown to roughly 24° — very nearly a whole sign. There is no single agreed value: this site uses the Lahiri ayanamsa, the Indian government standard, which is why switching the chart to sidereal moves most placements back by about one sign.",
+    cat: "astronomy",
+    see: ["precession", "tropical-zodiac", "sidereal-zodiac", "equinox"]
+  },
+  {
+    id: "julian-day",
+    term: "Julian Day",
+    short: "A continuous day count astronomers use instead of calendars.",
+    full: "A running tally of days since 1 January 4713 BC, used because calendar arithmetic is hopeless for computation — months vary, leap years are irregular, and the Gregorian reform deleted ten days in 1582. Every position on this site is computed from a Julian Day rather than a date. The count starts at noon rather than midnight, a convention that spares astronomers a date change in the middle of an observing night.",
+    cat: "astronomy",
+    see: ["ephemeris", "delta-t"]
+  },
+  {
+    id: "delta-t",
+    term: "Delta T",
+    short: "The drift between clock time and the Earth's actual rotation.",
+    full: "The Earth is not a reliable clock. Tidal friction slows its rotation, and the rate itself wanders unpredictably, so the time an ephemeris runs on and the time a wristwatch keeps gradually separate. Delta T is that difference: about 70 seconds today, around 2 hours in 1600. Ignoring it would misplace the Moon by an arcminute or so and the Ascendant by half a degree in a historical chart, so it is applied to every calculation here.",
+    cat: "astronomy",
+    see: ["julian-day", "ephemeris", "ascendant"]
+  },
+  {
+    id: "nutation",
+    term: "Nutation",
+    short: "A small nodding wobble in the Earth's axis, on top of precession.",
+    full: "Precession swings the Earth's axis round a 25,772-year cone; nutation is a much smaller nodding superimposed on it, driven mainly by the Moon's orbit tilting relative to the Earth's. Its largest term has a period of 18.6 years and an amplitude of about 17 arcseconds. Small, but larger than the accuracy this site claims, so it is applied rather than ignored.",
+    cat: "astronomy",
+    see: ["precession", "obliquity", "ecliptic"]
+  },
+  {
+    id: "local-sidereal-time",
+    term: "Local Sidereal Time",
+    short: "Time measured against the stars, and what fixes the Ascendant.",
+    full: "A sidereal day is the time the Earth takes to turn once relative to the stars: about four minutes shorter than a solar day, because the Earth also moves along its orbit. Local sidereal time tells you which celestial longitude is on your meridian right now, and it is the quantity that turns a birth time and a birthplace into an Ascendant and a Midheaven. It is also why the angles need the time and place that the planets do not.",
+    cat: "astronomy",
+    see: ["ascendant", "midheaven", "house-system"]
+  },
+  {
+    id: "declination",
+    term: "Declination",
+    short: "How far north or south of the celestial equator a body sits.",
+    full: "Celestial latitude measured from the equator rather than the ecliptic — the sky's equivalent of terrestrial latitude. Zodiacal astrology works almost entirely in longitude and ignores declination, but it matters for two things: whether a body is visible from a given latitude, and whether two bodies are in parallel, sharing a declination the way a conjunction shares a longitude.",
+    cat: "astronomy",
+    see: ["ecliptic", "obliquity", "zenith"]
+  },
+  {
+    id: "out-of-bounds",
+    term: "Out of bounds",
+    short: "A body further from the equator than the Sun ever goes.",
+    full: "The Sun's declination never exceeds about 23.4°, the tilt of the Earth's axis. A body that ranges beyond that — the Moon and Mercury do so regularly, Mars and Venus occasionally — is called out of bounds. The tradition reads it as operating outside the Sun's authority, but the underlying fact is plain geometry: the body's own orbital tilt has carried it past the solstice limit.",
+    cat: "astronomy",
+    see: ["declination", "obliquity", "solstice"]
+  },
+
+  /* ---------- patterns this site detects ---------- */
+  {
+    id: "grand-cross",
+    term: "Grand cross",
+    short: "Four bodies in two crossed oppositions, ninety degrees apart.",
+    full: "Four bodies spaced roughly 90° apart around the whole circle, forming two oppositions that cut across each other. Every pair is either square or opposed, so a grand cross contains no easy angle at all. Usually all four sit in the same modality — four cardinal signs, or four fixed — which the tradition reads as a great deal of drive with no direction it can escape in. This site marks one when the geometry holds within orb.",
+    cat: "aspect",
+    see: ["aspect-pattern", "square", "opposition", "t-square", "modality"]
+  },
+  {
+    id: "yod",
+    term: "Yod",
+    short: "Two bodies in sextile both quincunx a third.",
+    full: "A narrow triangle: two bodies 60° apart, both making a 150° quincunx to a third that sits opposite the midpoint between them. The two at the base are comfortable together; neither has any natural relationship with the apex. Sometimes called the finger of fate, which is more weight than the geometry deserves — a quincunx is simply an angle that shares neither element nor modality.",
+    cat: "aspect",
+    see: ["aspect-pattern", "quincunx", "sextile", "grand-trine"]
+  },
+  {
+    id: "applying-separating",
+    term: "Applying and separating",
+    short: "Whether an aspect is still forming or already past exact.",
+    full: "An aspect applies while the faster body is still closing on the exact angle, and separates once it has passed. Traditional practice weighs an applying aspect more heavily, on the reasoning that it is still arriving. Retrograde motion can reverse which is which, so the distinction depends on the bodies' speeds and directions rather than on their positions alone.",
+    cat: "aspect",
+    see: ["aspect", "orb", "retrograde", "stationary"]
+  },
+  {
+    id: "partile",
+    term: "Partile",
+    short: "An aspect exact to the same degree.",
+    full: "An aspect whose two bodies occupy the same numbered degree of their respective signs — a trine from 14° Aries to 14° Leo. Older texts treat partile aspects as markedly stronger than merely close ones, a rule that comes from working in whole degrees rather than decimals. Contrast platick, an aspect within orb but not degree-exact.",
+    cat: "aspect",
+    see: ["aspect", "orb", "aspect-orb", "degree"]
+  },
+
+  /* ---------- dignity, filled out ---------- */
+  {
+    id: "triplicity",
+    term: "Triplicity",
+    short: "Rulership of a whole element, shared by three planets.",
+    full: "The second-strongest essential dignity after domicile and exaltation. Each element has a set of triplicity rulers — commonly one for day charts, one for night, and a third participating throughout. A planet in a sign of its own triplicity is mildly strengthened. The day and night split makes triplicity the dignity most bound up with sect.",
+    cat: "technique",
+    see: ["dignity", "element", "sect", "ruler", "exaltation"]
+  },
+  {
+    id: "term-bound",
+    term: "Term (bound)",
+    short: "Unequal slices of a sign, each assigned to a planet.",
+    full: "Each sign is divided into five unequal spans, called terms or bounds, ruled by the five non-luminary planets. A planet in its own term gains a modest dignity. The boundaries were never fully agreed — Ptolemy's table differs from the Egyptian one still used in much of traditional practice — which is a useful reminder that these schemes are conventions rather than measurements.",
+    cat: "technique",
+    see: ["dignity", "decan", "triplicity", "ruler"]
+  },
+  {
+    id: "combust",
+    term: "Combust, cazimi and under the beams",
+    short: "Three degrees of closeness to the Sun, meaning three different things.",
+    full: "A planet within about 8.5° of the Sun is under the beams and reckoned weakened; within about 8° it is combust and weakened severely; but within 17 arcminutes it is cazimi, in the heart of the Sun, and counted powerfully strengthened instead. The underlying fact is visibility: a planet near the Sun is lost in the glare, and one exactly conjunct is a special case the tradition chose to read as favour rather than eclipse.",
+    cat: "technique",
+    see: ["conjunction", "dignity", "luminary", "orb"]
+  },
+  {
+    id: "peregrine",
+    term: "Peregrine",
+    short: "A planet with no essential dignity anywhere it stands.",
+    full: "Literally a wanderer or foreigner. A planet is peregrine when it holds none of the essential dignities — not in its own sign, exaltation, triplicity, term or face, and not in fall or detriment either. Traditional texts treat it as a planet without resources of its own, having to rely on whatever its aspects and house placement lend it.",
+    cat: "technique",
+    see: ["dignity", "detriment", "fall", "exaltation", "triplicity"]
+  },
+
+  /* ---------- points and techniques ---------- */
+  {
+    id: "part-of-fortune",
+    term: "Part of Fortune",
+    short: "A calculated point, not a body: Ascendant + Moon − Sun.",
+    full: "The best known of the Arabic parts or lots — a point derived by arithmetic from three others rather than observed in the sky. By day it is Ascendant plus Moon minus Sun; by night the Sun and Moon swap, which is one of the clearest surviving uses of sect. It marks nothing physical, and is worth naming as a construction rather than a discovery.",
+    cat: "chart",
+    see: ["ascendant", "luminary", "sect", "natal-chart"]
+  },
+  {
+    id: "vertex",
+    term: "Vertex",
+    short: "Where the prime vertical crosses the ecliptic in the west.",
+    full: "A calculated point marking the intersection of the ecliptic with the prime vertical — the great circle running due east and west through the zenith. Like the Ascendant it depends entirely on time and place, and like the Ascendant it is undefined at extreme latitudes. Modern practice associates it with encounters that feel unchosen; the geometry itself carries no such claim.",
+    cat: "chart",
+    see: ["ascendant", "descendant", "zenith", "ecliptic"]
+  },
+  {
+    id: "progression",
+    term: "Progression",
+    short: "A symbolic clock: one day after birth stands for one year of life.",
+    full: "The commonest form, secondary progression, advances the chart one day for each year lived, so a chart for the thirtieth day after birth is read as the thirtieth year. It is explicitly symbolic — nothing in the sky moves this way — and differs from a transit, which uses where the planets actually are now. The Moon is the fast mover in a progressed chart, covering roughly one sign every two and a half years.",
+    cat: "technique",
+    see: ["transit", "natal-chart", "solar-return", "lunation"]
+  },
+  {
+    id: "solar-return",
+    term: "Solar return",
+    short: "A chart for the moment the Sun regains its birth position.",
+    full: "Cast for the instant the Sun returns to the exact degree, minute and second it held at birth — usually within a day of the birthday, not on it. Read as a chart for the year ahead. Lunar returns do the same monthly. The return is a real astronomical event, precisely computable; the claim that it describes a year is the interpretive part.",
+    cat: "technique",
+    see: ["transit", "progression", "natal-chart", "ingress"]
+  },
+  {
+    id: "chart-shape",
+    term: "Chart shape",
+    short: "How the bodies are spread around the wheel, taken as a whole.",
+    full: "A reading of the overall distribution rather than any single placement: all ten bodies inside a third of the circle is a bundle, spread evenly is a splash, gathered opposite a lone body is a bucket, and so on. The classification is Marc Edmund Jones's, from the 1940s, and is one of the few interpretive schemes that looks at the chart as a pattern before it looks at parts.",
+    cat: "chart",
+    see: ["natal-chart", "stellium", "aspect-pattern", "hemisphere"]
+  },
+  {
+    id: "hemisphere",
+    term: "Hemisphere emphasis",
+    short: "Whether the bodies gather above or below the horizon, east or west.",
+    full: "The horizon axis splits the chart into a visible half above and a hidden half below; the meridian splits it east and west. A concentration in one half is read as a tilt of temperament — below the horizon as more private, above as more public, east as more self-directed. Because both axes depend on the birth time, hemisphere emphasis is meaningless without one.",
+    cat: "chart",
+    see: ["ascendant", "midheaven", "ic", "angular-houses", "chart-shape"]
+  },
+  {
+    id: "equal-house",
+    term: "Equal house",
+    short: "Twelve exact 30° houses counted from the Ascendant.",
+    full: "The first house begins at the Ascendant's exact degree and each subsequent cusp follows 30° later. Unlike Placidus it works at any latitude, and unlike whole sign it keeps the Ascendant as the first cusp rather than the sign containing it. Its cost is that the Midheaven no longer falls on the tenth cusp, which some practitioners regard as losing the point of a quadrant system.",
+    cat: "house",
+    see: ["house-system", "whole-sign-houses", "placidus", "ascendant", "midheaven"]
+  },
+  {
+    id: "minor-aspect",
+    term: "Minor aspects",
+    short: "Semisextile, semisquare, sesquiquadrate, quintile and the rest.",
+    full: "Angles outside the five Ptolemaic aspects, made by dividing the circle further: 30° semisextile, 45° semisquare, 135° sesquiquadrate, 72° quintile. They are given much tighter orbs, typically two degrees or less, because at 30° every sign boundary produces one by accident. Kepler argued for the quintile family on harmonic grounds; the tradition has never fully agreed which of them count.",
+    cat: "aspect",
+    see: ["aspect", "orb", "aspect-orb", "sextile", "square"]
+  },
+  {
+    id: "syzygy",
+    term: "Syzygy",
+    short: "Sun and Moon in a straight line — a new or full Moon.",
+    full: "Any alignment of three bodies, but in practice the Sun, Moon and Earth: the new Moon at conjunction, the full Moon at opposition. Eclipses happen at a syzygy that also falls near a lunar node, which is why they arrive in seasons rather than monthly. The prenatal syzygy — the last new or full Moon before a birth — is used in some traditional techniques.",
+    cat: "astronomy",
+    see: ["lunation", "conjunction", "opposition", "lunar-node"]
   }
 ];

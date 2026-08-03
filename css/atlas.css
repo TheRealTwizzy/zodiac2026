@@ -1643,3 +1643,7 @@ svg#natal{display:block;width:100%;height:auto;overflow:visible}
 /* accent the filter chips instead of stark white */
 .gcats .chip[aria-pressed="true"],
 .pl-filter .chip[aria-pressed="true"]{--chipc:#a78bfa}
+
+/* the source link under a marked answer */
+.qwhy .qsrc{margin-top:11px}
+.qwhy .qsrc .footlink{font-size:12.5px}

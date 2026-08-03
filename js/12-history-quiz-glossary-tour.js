@@ -272,6 +272,26 @@ function drawQuiz(){
     "</div>";
 }
 
+/* Where the answer to a question actually lives. The category already records
+   what a question is about, so the link is derived rather than 48 hand-written
+   mappings that would drift the moment a question was reworded. A question can
+   still name its own `src` when it belongs somewhere the category wouldn't
+   guess. */
+var QUIZ_SOURCE = {
+  elements:   { id:"wheel",    label:"The Wheel" },
+  modalities: { id:"wheel",    label:"The Wheel" },
+  rulers:     { id:"planets",  label:"Planets & Bodies" },
+  aspects:    { id:"aspects",  label:"Aspects" },
+  houses:     { id:"houses",   label:"The Houses" },
+  astronomy:  { id:"about",    label:"How to Read This" },
+  basics:     { id:"start",    label:"Start Here" }
+};
+function quizSource(q){
+  if (q.src && QUIZ_SOURCE[q.src]) return QUIZ_SOURCE[q.src];
+  if (q.src) return null;
+  return QUIZ_SOURCE[q.cat] || null;
+}
+
 function answerQuiz(i){
   if (qAnswered) return;
   qAnswered = true;
@@ -285,8 +305,11 @@ function answerQuiz(i){
   });
   announce(right ? "Correct." : "Not quite. The answer is " + q.choices[q.a] + ".");
   var w = $("#qWhy");
+  var src = quizSource(q);
   w.innerHTML = "<b>" + (right ? "Correct. " : "Not quite — the answer is " +
     E(q.choices[q.a]) + ". ") + "</b>" + E(q.why) +
+    (src ? '<div class="qsrc"><button class="footlink" type="button" data-go="' + src.id +
+      '">Read this properly in ' + E(src.label) + ' →</button></div>' : "") +
     '<div style="margin-top:13px"><button class="btn primary" data-qgo="next" ' +
     'style="padding:9px 18px;font-size:13px">' +
     (qIdx + 1 >= qSet.length ? "See results" : "Next question") + " →</button></div>";
